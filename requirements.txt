@@ -1,0 +1,10 @@
+cvxpy >= 1.1
+flake8
+matplotlib
+gurobipy ==10.0
+numpy >= 1.18
+pybullet
+torch 
+scipy >= 1.4
+tensorboard >= 2.3
+wandb
