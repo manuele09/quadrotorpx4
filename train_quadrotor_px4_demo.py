@@ -32,7 +32,7 @@ def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
     def compute_next_v(model, rpyu):
         # Questa funzione calcola la differenza tra l'output del modello quando si passa rpyu e l'output del modello quando si passa rpyu_equilibrium. In sostanza, sta calcolando la differenza tra l'uscita del modello in due stati diversi.
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return model(rpyu).to(device) - model(rpyu_equilibrium).to(device)
+        return model(rpyu) - model(rpyu_equilibrium.clone().to(device))
 
     utils.train_approximator(v_dataset,
                              forward_model,
@@ -49,10 +49,12 @@ def train_lqr_value_approximator(state_value_dataset, lyapunov_relu, V_lambda, R
     """
 
     R.requires_grad_(True)
+    R = R.detach()
 
     def compute_v(model, x):
-        return model(x) - model(x_equilibrium) + V_lambda * torch.norm(
-            R @ (x - x_equilibrium).T, p=1, dim=0).reshape((-1, 1))
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return model(x) - model(x_equilibrium.to(device)) + (V_lambda * torch.norm(
+            R.to(device) @ (x - x_equilibrium.to(device)).T, p=1, dim=0).reshape((-1, 1)))
 
     utils.train_approximator(state_value_dataset,
                              lyapunov_relu,
@@ -67,7 +69,8 @@ def train_lqr_value_approximator(state_value_dataset, lyapunov_relu, V_lambda, R
 def train_controller_approximator(control_dataset, controller_relu, state_eq, control_equilibrium, lr, num_epochs=100, batch_size=20):
 
     def compute_control(model, dataset):
-        return model(dataset) - model(state_eq) + control_equilibrium
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return model(dataset) - model(state_eq.clone().to(device)) + control_equilibrium.clone().to(device)
 
     utils.train_approximator(control_dataset,
                              controller_relu,
@@ -149,9 +152,10 @@ if __name__ == "__main__":
     if load_models:
 
         R = torch.load("R_26_12_2023.pt")
-        forward_model = torch.load("px4_forwardModel_trained.pt")
-        lyapunov_relu = torch.load("px4_lyapunov_func_trained.pt")
-        controller_relu = torch.load("px4_controller_trained.pt")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        forward_model = torch.load("px4_forwardModel_trained.pt", map_location=device)
+        lyapunov_relu = torch.load("px4_lyapunov_func_trained.pt", map_location=device)
+        controller_relu = torch.load("px4_controller_trained.pt", map_location=device)
     else:
         train_forward_model(forward_model,
                             rpyu_equilibrium,

@@ -1310,7 +1310,8 @@ def train_approximator(dataset,
             input_samples, target = data
             input_samples, target = input_samples.to(device), target.to(device)
             optimizer.zero_grad()
-
+            
+            
             output_samples = output_fun(model, input_samples,
                                         **output_fun_args)
             batch_loss = loss(output_samples, target)
