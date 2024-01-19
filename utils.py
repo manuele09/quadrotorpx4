@@ -1288,7 +1288,6 @@ def train_approximator(dataset,
     model.to(device)
     if additional_variable:
         additional_variable = [var.to(device) for var in additional_variable]
-    output_fun.to(device)
 
 
     train_set_size = int(len(dataset) * 0.8)

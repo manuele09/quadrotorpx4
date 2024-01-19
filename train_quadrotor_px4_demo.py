@@ -31,7 +31,8 @@ def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
 
     def compute_next_v(model, rpyu):
         # Questa funzione calcola la differenza tra l'output del modello quando si passa rpyu e l'output del modello quando si passa rpyu_equilibrium. In sostanza, sta calcolando la differenza tra l'uscita del modello in due stati diversi.
-        return model(rpyu) - model(rpyu_equilibrium)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return model(rpyu).to(device) - model(rpyu_equilibrium).to(device)
 
     utils.train_approximator(v_dataset,
                              forward_model,
