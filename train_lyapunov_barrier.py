@@ -102,7 +102,7 @@ class Trainer:
 
         # Save the neural network model to this folder. If set to None, then
         # don't save the network.
-        self.save_network_path = 'Test_26_12_2023_pixhawk_quad'
+        self.save_network_path = 'Models/px4'
         # By default, every 10 iterations in the optimizer, we save the
         # network.
         self.save_network_iterations = 1

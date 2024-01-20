@@ -160,19 +160,18 @@ if __name__ == "__main__":
         train_forward_model(forward_model,
                             rpyu_equilibrium,
                             model_dataset,
-                            num_epochs=100)
+                            num_epochs=5, batch_size=200)
         torch.save(forward_model, 'px4_forwardModel_trained.pt')
 
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001)
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=5, batch_size=200)
         torch.save(controller_relu, 'px4_controller_trained.pt')
 
         train_lqr_value_approximator(
-            cost_dataset, lyapunov_relu, V_lambda, R, x_eq)
+            cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=5, batch_size=200)
         torch.save(lyapunov_relu, 'px4_lyapunov_func_trained.pt')
         torch.save(R, "R_26_12_2023.pt")
 
-        sys.exit(0)
 
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(
         dtype, x_lo, x_up, u_lo, u_up, forward_model, hover_thrust, dt)
@@ -215,12 +214,19 @@ if __name__ == "__main__":
     # dut.save_network_path = 'models'
     state_samples_all = utils.uniform_sample_in_box(x_lo, x_up, 200000)
     dut.output_flag = True
-    if train_on_samples:
-        print("Training on samples start!!")
-        dut.train_lyapunov_on_samples(state_samples_all,
+
+    dut.train_lyapunov_on_samples(state_samples_all,
                                       num_epochs=30,
                                       batch_size=200)
-    dut.enable_wandb = False
-    print("Training on samples done!!")
-    dut.train(torch.empty((0, 9), dtype=dtype))
+    
+
+    # if train_on_samples:
+    #     print("Training on samples start!!")
+    #     dut.train_lyapunov_on_samples(state_samples_all,
+    #                                   num_epochs=30,
+    #                                   batch_size=200)
+    # dut.enable_wandb = False
+    # print("Training on samples done!!")
+    # dut.train(torch.empty((0, 9), dtype=dtype))
+
     pass
