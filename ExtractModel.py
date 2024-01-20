@@ -21,10 +21,12 @@ def count_parameters(model):
     return total_params
 
 
-base_path = "./Models/px4/1/"
+base_path = "./Models/px4/64/"
+# base_path = "./Models"
 
 # Load Model from local
 dtype = torch.float64
+# model = torch.load(os.path.join(base_path, "px4_controller_trained.pt"))
 model = torch.load(os.path.join(base_path, "controller.pt"))
 count_parameters(model)
 model_state_dict = model.state_dict()
