@@ -23,7 +23,31 @@ class Trainer:
     has a controller, we can also train that controller such that the feedback
     system is stable/safe.
     """
-    def __init__(self, tensorboard_log=False, log_dir="./Logs"):
+    def __init__(self, tensorboard_log=False, log_dir="./Logs", enable_wandb=False, wandb_dict=None):
+        self.enable_wandb = enable_wandb
+        if enable_wandb and wandb_dict is not None:
+            self.wandb_api = wandb.Api()
+            projects = self.wandb_api.projects(wandb_dict["entity"])
+            project_exists = any(p.name == wandb_dict["project"] for p in projects)
+          
+            # If the project exists...
+            if project_exists:
+                # Search for the run in the project
+                runs = self.wandb_api.runs(wandb_dict["entity"] + "/" + wandb_dict["project"])
+                run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
+                # If the run doesn't exist, create it
+                if (run_id is None):
+                    print(f"Wandb: creating new run: {wandb_dict['run_name']}")
+                    wandb.init(project=wandb_dict["project"], name=wandb_dict["run_name"], sync_tensorboard=True)
+                # If the run exists, resume it
+                else:
+                    print(f"Wandb: resuming run: {wandb_dict['run_name']}")
+                    wandb.init(project=wandb_dict["project"], id=run_id, resume="must", sync_tensorboard=True)
+            else:
+                print(f"Wandb: project {wandb_dict['project']} does not exist.")
+                return
+
+
         if tensorboard_log:
             self.writer = SummaryWriter(log_dir)
         else:
@@ -97,8 +121,6 @@ class Trainer:
         # We support Adam or SGD.
         self.optimizer = "Adam"
 
-        # Enable wandb to log the data.
-        self.enable_wandb = False
 
         # Save the neural network model to this folder. If set to None, then
         # don't save the network.
@@ -851,7 +873,7 @@ class Trainer:
 
     def _save_network(self, iter_count):
         print("Iterazione: ",iter_count )
-        data_path =os.path.join(self.save_network_path,'%d'%iter_count)
+        data_path =os.path.join(self.save_network_path, "px4", '%d'%iter_count)
         os.makedirs(data_path)
         torch.save(self.lyapunov_hybrid_system.lyapunov_relu,
                     data_path + f'{"/lyapunov.pt"}')
@@ -862,6 +884,11 @@ class Trainer:
             torch.save(
                 self.lyapunov_hybrid_system.system.controller_network,
                 data_path + f'{"/controller.pt"}')
+        
+        if self.enable_wandb:
+            wandb.save(self.save_network_path + "/px4/"+str(iter_count)+"/R.pt", base_path=self.save_network_path, policy="now")
+            wandb.save(self.save_network_path + "/px4/"+str(iter_count)+"/controller.pt", base_path=self.save_network_path, policy="now")
+            wandb.save(self.save_network_path + "/px4/"+str(iter_count)+"/lyapunov.pt", base_path=self.save_network_path, policy="now")
 
     def print(self):
         """
@@ -1018,7 +1045,7 @@ class Trainer:
                 total_loss_return.lyap_loss.derivative_mip_obj)
 
     def train_lyapunov_on_samples(self, state_samples_all, num_epochs,
-                                  batch_size, resume_epoch=0):
+                                  batch_size, last_epoch_saved=-1):
         """
         Train a ReLU network on given state samples (not the adversarial states
         found by MIP). The loss function is the weighted sum of the lyapunov
@@ -1046,8 +1073,7 @@ class Trainer:
                                                   batch_size=batch_size,
                                                   shuffle=True)
         test_state_samples = test_dataset[:][0]
-        for epoch in range(resume_epoch, resume_epoch + num_epochs):
-            self._save_network(epoch)
+        for epoch in range(last_epoch_saved + 1, last_epoch_saved + 1 + num_epochs):
             running_loss = 0.
             positivity_loss = 0.
             derivative_loss = 0.
@@ -1079,6 +1105,9 @@ class Trainer:
                 positivity_loss += total_loss_return.lyap_loss.positivity_sample_loss.item() + total_loss_return.lyap_loss.positivity_mip_loss.item()
                 derivative_loss += total_loss_return.lyap_loss.derivative_sample_loss.item() + total_loss_return.lyap_loss.derivative_mip_loss.item()
 
+            running_loss /= len(data_loader)
+            positivity_loss /= len(data_loader)
+            derivative_loss /= len(data_loader)
 
             # Compute the test loss
             test_state_samples_next = torch.stack([
@@ -1109,6 +1138,15 @@ class Trainer:
                 self.writer.add_scalar('samples_loss/test/positive', test_positivity_loss, global_step=epoch)
                 self.writer.add_scalar('samples_loss/test/derivative', test_derivative_loss, global_step=epoch)
             
+            if self.enable_wandb:
+                wandb.log({
+                    "train_loss": running_loss,
+                    "train_positivity_loss": positivity_loss,
+                    "train_derivative_loss": derivative_loss,
+                    "test_loss": test_loss_return.loss.item(),
+                    "test_positivity_loss": test_positivity_loss,
+                    "test_derivative_loss": test_derivative_loss,
+                })
             if self.output_flag:
                 print(f"TrainLoss -- Iter {epoch}, loss {running_loss}, " +
                       "positivity cost " +
@@ -1120,20 +1158,7 @@ class Trainer:
                       f"{test_positivity_loss}, " +
                       "derivative_cost " +
                       f"{test_derivative_loss}")
-            #     file1 = open("Derivative_train_on_samples.txt","a")
-            #     file1.write(str(total_loss_return.lyap_loss.derivative_mip_obj))
-            #     file1.write("\n")
-            #     file1.close()
-
-            #     file2 = open("Positivity_train_on_samples.txt","a")
-            #     file2.write(str(total_loss_return.lyap_loss.positivity_mip_obj))
-            #     file2.write("\n")
-            #     file2.close()
-
-            #     file4 = open("Loss_train_on_samples.txt","a")
-            #     file4.write(str(total_loss_return.loss.item()))
-            #     file4.write("\n")
-            #     file4.close()
+            
             test_loss = test_loss_return.loss
             if test_loss.item() < best_loss:
                 best_loss = test_loss.item()
@@ -1143,7 +1168,9 @@ class Trainer:
                               feedback_system.FeedbackSystem):
                     best_controller_relu = copy.deepcopy(
                         self.lyapunov_hybrid_system.system.controller_network)
-
+                        
+            self._save_network(epoch)
+        
         print(f"best loss {best_loss}")
         self.lyapunov_hybrid_system.lyapunov_relu.load_state_dict(
             best_lyapunov_relu.state_dict())
