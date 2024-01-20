@@ -9,9 +9,8 @@ import pandas as pd
 import torch
 import numpy as np
 import argparse
-import os
-import sys
 import gurobipy
+import wandb
 
 # roll pitch yaw u of equilibrium
 
@@ -87,6 +86,47 @@ def load_data(path, n_in):
     dati_output = Dati_val[:, n_in:]
 
     return dati_input, dati_output
+
+def load_from_wandb(wandb_dict, last_epoch, models_path):
+    wandb_api = wandb.Api()
+    projects = wandb_api.projects(wandb_dict["entity"])
+    project_exists = any(p.name == wandb_dict["project"] for p in projects)
+    # If the project exists...
+    if project_exists:
+        # Search for the run in the project
+        runs = wandb_api.runs(wandb_dict["entity"] + "/" + wandb_dict["project"])
+        run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
+        if run_id is not None:
+            run = wandb_api.run(wandb_dict["entity"] + "/" + wandb_dict["project"] +"/" + run_id)
+            
+            file = run.file('px4/'+str(last_epoch)+'/R.pt')
+            if file.size != 0:
+                file.download(models_path, replace=True)
+            else:
+                print("R.pt does not exists")
+                return
+
+            file = run.file('px4/'+str(last_epoch)+'/controller.pt')
+            if file.size != 0:
+                file.download(models_path, replace=True)
+            else:
+                print("controller.pt does not exists")
+                return
+
+            file = run.file('px4/'+str(last_epoch)+'/lyapunov.pt')
+            if file.size != 0:
+                file.download(models_path, replace=True)
+            else:
+                print("lyapunov.pt does not exists")
+                return
+        else:
+            print("Run does not exists")
+            return
+    else:
+        print("Project does not exists")
+        return
+    return
+
 
 
 if __name__ == "__main__":
