@@ -1018,7 +1018,7 @@ class Trainer:
                 total_loss_return.lyap_loss.derivative_mip_obj)
 
     def train_lyapunov_on_samples(self, state_samples_all, num_epochs,
-                                  batch_size):
+                                  batch_size, resume_epoch=0):
         """
         Train a ReLU network on given state samples (not the adversarial states
         found by MIP). The loss function is the weighted sum of the lyapunov
@@ -1046,7 +1046,7 @@ class Trainer:
                                                   batch_size=batch_size,
                                                   shuffle=True)
         test_state_samples = test_dataset[:][0]
-        for epoch in range(num_epochs):
+        for epoch in range(resume_epoch, resume_epoch + num_epochs):
             self._save_network(epoch)
             running_loss = 0.
             positivity_loss = 0.
