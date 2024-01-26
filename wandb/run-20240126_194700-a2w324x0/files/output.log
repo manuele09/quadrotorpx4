@@ -1,0 +1,47 @@
+epoch 0 training loss 2.1927544578134593e-05, test loss 8.451502402179687e-06
+epoch 1 training loss 8.788737008465253e-06, test loss 8.465183181645838e-06
+epoch 2 training loss 8.808215044410135e-06, test loss 8.470389170822726e-06
+epoch 3 training loss 8.806086794008384e-06, test loss 8.462799194297574e-06
+epoch 4 training loss 8.817630542067466e-06, test loss 8.45071012191685e-06
+Traceback (most recent call last):
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 212, in <module>
+    train_forward_model(forward_model,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 37, in train_forward_model
+    utils.train_approximator(v_dataset,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/utils.py", line 1424, in train_approximator
+    wandbUpload(file_path, "model.pt")
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/utils.py", line 42, in wandbUpload
+    wandb.save(global_path, base_path=base_path, policy="now")
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 371, in wrapper_fn
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 361, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 1852, in save
+    return self._save(glob_str, base_path, policy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 1882, in _save
+    raise ValueError("globs can't walk above base_path")
+ValueError: globs can't walk above base_path
+Traceback (most recent call last):
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 212, in <module>
+    train_forward_model(forward_model,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 37, in train_forward_model
+    utils.train_approximator(v_dataset,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/utils.py", line 1424, in train_approximator
+    wandbUpload(file_path, "model.pt")
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/utils.py", line 42, in wandbUpload
+    wandb.save(global_path, base_path=base_path, policy="now")
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 371, in wrapper_fn
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 361, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 1852, in save
+    return self._save(glob_str, base_path, policy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 1882, in _save
+    raise ValueError("globs can't walk above base_path")
+ValueError: globs can't walk above base_path

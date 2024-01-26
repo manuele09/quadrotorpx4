@@ -1,0 +1,8 @@
+Directory created: ./WandbLogs
+Directory created: ./WandbLogs/Lyapunov Quadrotor
+Directory created: ./WandbLogs/Lyapunov Quadrotor/PreTrainingForward
+epoch 0 training loss 4.48953929968462e-05, test loss 8.532794961862394e-06
+epoch 1 training loss 8.78061061011161e-06, test loss 8.517923837458024e-06
+epoch 2 training loss 8.789676480582157e-06, test loss 8.483312889765588e-06
+epoch 3 training loss 8.827148297298546e-06, test loss 8.510525839152875e-06
+epoch 4 training loss 9.390999879048583e-06, test loss 8.534971358914427e-06

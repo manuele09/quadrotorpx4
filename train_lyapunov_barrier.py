@@ -15,6 +15,29 @@ import gurobi_torch_mip as gurobi_torch_mip
 import os
 from torch.utils.tensorboard import SummaryWriter
 
+# Init wandb. If needed, the project or the run will be created.
+# If the project or the run exist, they will be resumed.
+def wandbInit(entity, project, run_name):
+    wandb_api = wandb.Api()
+    projects = wandb_api.projects(entity)
+    project_exists = any(p.name == project for p in projects)
+
+    if project_exists:
+        # Search for the run in the project
+        runs = wandb_api.runs(entity + "/" + project)
+        run_id = next((run.id for run in runs if run.name == run_name), None)
+        # If the run doesn't exist, create it
+        if (run_id is None):
+            print(f"Wandb: creating new run: {run_name}")
+            wandb.init(project=project, name=run_name, sync_tensorboard=True)
+        # If the run exists, resume it
+        else:
+            print(f"Wandb: resuming run: {run_name}")
+            wandb.init(project=project, id=run_id, resume="must", sync_tensorboard=True)
+        wandb.init(project=project, name=run_name, resume="allow", sync_tensorboard=True)
+    else:
+        print(f"Wandb: creating new project and run: {project}/{run_name}")
+        wandb.init(project=project, name=run_name, sync_tensorboard=True)
 
 class Trainer:
     """
@@ -25,28 +48,6 @@ class Trainer:
     """
     def __init__(self, tensorboard_log=False, log_dir="./Logs", enable_wandb=False, wandb_dict=None):
         self.enable_wandb = enable_wandb
-        if enable_wandb and wandb_dict is not None:
-            self.wandb_api = wandb.Api()
-            projects = self.wandb_api.projects(wandb_dict["entity"])
-            project_exists = any(p.name == wandb_dict["project"] for p in projects)
-          
-            # If the project exists...
-            if project_exists:
-                # Search for the run in the project
-                runs = self.wandb_api.runs(wandb_dict["entity"] + "/" + wandb_dict["project"])
-                run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
-                # If the run doesn't exist, create it
-                if (run_id is None):
-                    print(f"Wandb: creating new run: {wandb_dict['run_name']}")
-                    wandb.init(project=wandb_dict["project"], name=wandb_dict["run_name"], sync_tensorboard=True)
-                # If the run exists, resume it
-                else:
-                    print(f"Wandb: resuming run: {wandb_dict['run_name']}")
-                    wandb.init(project=wandb_dict["project"], id=run_id, resume="must", sync_tensorboard=True)
-            else:
-                print(f"Wandb: project {wandb_dict['project']} does not exist.")
-                return
-
 
         if tensorboard_log:
             self.writer = SummaryWriter(log_dir)

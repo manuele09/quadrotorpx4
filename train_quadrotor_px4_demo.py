@@ -11,12 +11,13 @@ import numpy as np
 import argparse
 import gurobipy
 import wandb
+import sys
 
 # roll pitch yaw u of equilibrium
 
 
 def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
-                        num_epochs=100, batch_size=20, lr=0.005):
+                        num_epochs=100, batch_size=20, lr=0.005, wandb_dict=None):
     # The forward model maps (roll[n], pitch[n], yaw[n],
     # roll_sp[n], pitch_sp[n], yaw_sp[n], thrust_sp[n]) to
     # (dx[n+1] - dx[n], dy[n+1] - dy[n], dz[n+1] - dz[n], roll[n+1] - roll[n],
@@ -38,10 +39,11 @@ def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
                              compute_next_v,
                              batch_size=batch_size,
                              num_epochs=num_epochs,
-                             lr=lr)  # vera e propria funzione di training
+                             lr=lr,
+                             wandb_dict=wandb_dict)  # vera e propria funzione di training
 
 
-def train_lqr_value_approximator(state_value_dataset, lyapunov_relu, V_lambda, R, x_equilibrium, num_epochs=100, batch_size=20, lr=0.001):
+def train_lqr_value_approximator(state_value_dataset, lyapunov_relu, V_lambda, R, x_equilibrium, num_epochs=100, batch_size=20, lr=0.001, wandb_dict=None):
     """
     We train both lyapunov_relu and R such that ϕ(x) − ϕ(x*) + λ|R(x−x*)|₁
     approximates the lqr cost-to-go.
@@ -61,11 +63,12 @@ def train_lqr_value_approximator(state_value_dataset, lyapunov_relu, V_lambda, R
                              batch_size=batch_size,
                              num_epochs=num_epochs,
                              lr=lr,
-                             additional_variable=[R])
+                             additional_variable=[R],
+                             wandb_dict=wandb_dict)
     R.requires_grad_(False)
 
 
-def train_controller_approximator(control_dataset, controller_relu, state_eq, control_equilibrium, lr, num_epochs=100, batch_size=20):
+def train_controller_approximator(control_dataset, controller_relu, state_eq, control_equilibrium, lr, num_epochs=100, batch_size=20, wandb_dict=None):
 
     def compute_control(model, dataset):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,7 +79,8 @@ def train_controller_approximator(control_dataset, controller_relu, state_eq, co
                              compute_control,
                              batch_size=batch_size,
                              num_epochs=num_epochs,
-                             lr=lr)
+                             lr=lr,
+                             wandb_dict=wandb_dict)
 
 
 def load_data(path, n_in):
@@ -143,7 +147,6 @@ if __name__ == "__main__":
     cost_dataset = torch.utils.data.TensorDataset(
         torch.tensor(cost_in), torch.tensor(cost_out))
 
-    load_models = False
     train_on_samples = True
 
     dtype = torch.float64
@@ -188,6 +191,14 @@ if __name__ == "__main__":
                                        negative_slope=0.01,
                                        bias=True,
                                        dtype=dtype)
+    
+    wandb.login(key="e3f943e00cb1fa8a14fd0ea76ed9ee6d50f86f5b")
+    
+    wandb_dict = {"entity": "emacannizzo",
+              "project": "Lyapunov Quadrotor",
+              "run_name": "Prima Run"}
+    
+    load_models = False
 
     if load_models:
 
@@ -197,22 +208,25 @@ if __name__ == "__main__":
         lyapunov_relu = torch.load("px4_lyapunov_func_trained.pt", map_location=device)
         controller_relu = torch.load("px4_controller_trained.pt", map_location=device)
     else:
+        wandb_dict["run_name"] = "PreTrainingForward"
         train_forward_model(forward_model,
                             rpyu_equilibrium,
                             model_dataset,
-                            num_epochs=5, batch_size=200)
-        torch.save(forward_model, 'px4_forwardModel_trained.pt')
+                            num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
+        # torch.save(forward_model, 'px4_forwardModel_trained.pt')
 
+        wandb_dict["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=5, batch_size=200)
-        torch.save(controller_relu, 'px4_controller_trained.pt')
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
+        # torch.save(controller_relu, 'px4_controller_trained.pt')
 
+        wandb_dict["run_name"] = "PreTrainingLyapunov"
         train_lqr_value_approximator(
-            cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=5, batch_size=200)
-        torch.save(lyapunov_relu, 'px4_lyapunov_func_trained.pt')
-        torch.save(R, "R_26_12_2023.pt")
+            cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
+        # torch.save(lyapunov_relu, 'px4_lyapunov_func_trained.pt')
+        # torch.save(R, "R_26_12_2023.pt")
 
-
+    exit()
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(
         dtype, x_lo, x_up, u_lo, u_up, forward_model, hover_thrust, dt)
     forward_system.x_equilibrium = x_eq

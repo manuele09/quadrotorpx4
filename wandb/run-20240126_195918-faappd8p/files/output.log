@@ -1,0 +1,8 @@
+Directory already exists: ./WandbLogs
+Directory already exists: ./WandbLogs/Lyapunov Quadrotor
+Directory created: ./WandbLogs/Lyapunov Quadrotor/PreTrainingController3
+epoch 0 training loss 103.34310721477502, test loss 84.39795597920403
+epoch 1 training loss 57.19533004709635, test loss 29.442283312163255
+epoch 2 training loss 11.823901300308119, test loss 1.756756339081795
+epoch 3 training loss 0.6911126889703485, test loss 0.3835146505795476
+epoch 4 training loss 0.35367766161743114, test loss 0.3445015809933882

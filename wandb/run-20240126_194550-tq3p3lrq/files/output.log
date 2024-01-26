@@ -1,0 +1,39 @@
+epoch 0 training loss 1.8969043133365048e-05, test loss 8.645224055808852e-06
+epoch 1 training loss 8.846714748927107e-06, test loss 8.67017136779142e-06
+epoch 2 training loss 8.885560182527766e-06, test loss 8.883720755033406e-06
+epoch 3 training loss 8.836440275440552e-06, test loss 8.657382155510631e-06
+Traceback (most recent call last):
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 212, in <module>
+    train_forward_model(forward_model,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 37, in train_forward_model
+    utils.train_approximator(v_dataset,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/utils.py", line 1419, in train_approximator
+    torch.save(model, file_path)
+  File "/home/emanuele/.local/lib/python3.11/site-packages/torch/serialization.py", line 440, in save
+    with _open_zipfile_writer(f) as opened_zipfile:
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/torch/serialization.py", line 315, in _open_zipfile_writer
+    return container(name_or_buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/torch/serialization.py", line 288, in __init__
+    super().__init__(torch._C.PyTorchFileWriter(str(name)))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Parent directory WandbLogs/Lyapunov Quadrotor/PreTrainingForward does not exist.
+Traceback (most recent call last):
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 212, in <module>
+    train_forward_model(forward_model,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py", line 37, in train_forward_model
+    utils.train_approximator(v_dataset,
+  File "/home/emanuele/Università/Magistrale/Nuovo Progetto/quadrotorpx4/utils.py", line 1419, in train_approximator
+    torch.save(model, file_path)
+  File "/home/emanuele/.local/lib/python3.11/site-packages/torch/serialization.py", line 440, in save
+    with _open_zipfile_writer(f) as opened_zipfile:
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/torch/serialization.py", line 315, in _open_zipfile_writer
+    return container(name_or_buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/emanuele/.local/lib/python3.11/site-packages/torch/serialization.py", line 288, in __init__
+    super().__init__(torch._C.PyTorchFileWriter(str(name)))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Parent directory WandbLogs/Lyapunov Quadrotor/PreTrainingForward does not exist.
+epoch 4 training loss 8.850772903032344e-06, test loss 8.793011601132236e-06

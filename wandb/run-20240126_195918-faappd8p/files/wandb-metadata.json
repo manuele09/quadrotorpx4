@@ -1,0 +1,80 @@
+{
+    "os": "Linux-6.2.0-39-generic-x86_64-with-glibc2.37",
+    "python": "3.11.4",
+    "heartbeatAt": "2024-01-26T18:59:19.871428",
+    "startedAt": "2024-01-26T18:59:18.570090",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/emanuele/Universit\u00e0/Magistrale/Nuovo Progetto/quadrotorpx4/train_quadrotor_px4_demo.py",
+    "codePathLocal": "train_quadrotor_px4_demo.py",
+    "codePath": "train_quadrotor_px4_demo.py",
+    "git": {
+        "remote": "https://github.com/manuele09/quadrotorpx4.git",
+        "commit": "b3f740e8ab66839f17a19f6b881953ee9081ba15"
+    },
+    "email": "emacannizzo@gmail.com",
+    "root": "/home/emanuele/Universit\u00e0/Magistrale/Nuovo Progetto/quadrotorpx4",
+    "host": "asus",
+    "username": "emanuele",
+    "executable": "/usr/bin/python",
+    "cpu_count": 4,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 3157.0713749999995,
+        "min": 400.0,
+        "max": 3600.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3231.582,
+            "min": 400.0,
+            "max": 3600.0
+        },
+        {
+            "current": 3325.423,
+            "min": 400.0,
+            "max": 3600.0
+        },
+        {
+            "current": 3180.054,
+            "min": 400.0,
+            "max": 3600.0
+        },
+        {
+            "current": 3292.172,
+            "min": 400.0,
+            "max": 3600.0
+        },
+        {
+            "current": 3257.853,
+            "min": 400.0,
+            "max": 3600.0
+        },
+        {
+            "current": 3138.465,
+            "min": 400.0,
+            "max": 3600.0
+        },
+        {
+            "current": 2504.316,
+            "min": 400.0,
+            "max": 3600.0
+        },
+        {
+            "current": 3326.706,
+            "min": 400.0,
+            "max": 3600.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 213.35283279418945,
+            "used": 183.13690567016602
+        }
+    },
+    "memory": {
+        "total": 7.262584686279297
+    }
+}
