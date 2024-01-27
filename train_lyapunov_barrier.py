@@ -15,29 +15,6 @@ import gurobi_torch_mip as gurobi_torch_mip
 import os
 from torch.utils.tensorboard import SummaryWriter
 
-# Init wandb. If needed, the project or the run will be created.
-# If the project or the run exist, they will be resumed.
-def wandbInit(entity, project, run_name):
-    wandb_api = wandb.Api()
-    projects = wandb_api.projects(entity)
-    project_exists = any(p.name == project for p in projects)
-
-    if project_exists:
-        # Search for the run in the project
-        runs = wandb_api.runs(entity + "/" + project)
-        run_id = next((run.id for run in runs if run.name == run_name), None)
-        # If the run doesn't exist, create it
-        if (run_id is None):
-            print(f"Wandb: creating new run: {run_name}")
-            wandb.init(project=project, name=run_name, sync_tensorboard=True)
-        # If the run exists, resume it
-        else:
-            print(f"Wandb: resuming run: {run_name}")
-            wandb.init(project=project, id=run_id, resume="must", sync_tensorboard=True)
-        wandb.init(project=project, name=run_name, resume="allow", sync_tensorboard=True)
-    else:
-        print(f"Wandb: creating new project and run: {project}/{run_name}")
-        wandb.init(project=project, name=run_name, sync_tensorboard=True)
 
 class Trainer:
     """
@@ -872,24 +849,37 @@ class Trainer:
 
         return Trainer.TotalLossReturn(loss, lyap_loss, barrier_loss)
 
-    def _save_network(self, iter_count):
-        print("Iterazione: ",iter_count )
-        data_path =os.path.join(self.save_network_path, "px4", '%d'%iter_count)
-        os.makedirs(data_path)
-        torch.save(self.lyapunov_hybrid_system.lyapunov_relu,
-                    data_path + f'{"/lyapunov.pt"}')
-        torch.save(self.R_options.R(),
-                    data_path + f'{"/R.pt"}')
-        if isinstance(self.lyapunov_hybrid_system.system,
-                        feedback_system.FeedbackSystem):
-            torch.save(
-                self.lyapunov_hybrid_system.system.controller_network,
-                data_path + f'{"/controller.pt"}')
+    def _save_network(self, iter_count, wandb_dict=None):
+        if wandb_dict is not None:
+            utils.create_subdirectories(utils.wandbGetLocalPath(wandb_dict), [str(iter_count)])
+            base_path = os.path.join(utils.wandbGetLocalPath(wandb_dict), str(iter_count))
+
+            file_path = os.path.join(base_path, "lyapunov.pt")
+            torch.save(self.lyapunov_hybrid_system.lyapunov_relu, file_path)
+            utils.wandbUpload(file_path, os.path.dirname(base_path))
+            
+            file_path = os.path.join(base_path, "R.pt")
+            torch.save(self.R_options.R(), file_path)
+            utils.wandbUpload(file_path, os.path.dirname(base_path))
+
+            if isinstance(self.lyapunov_hybrid_system.system,
+                            feedback_system.FeedbackSystem):
+                file_path = os.path.join(base_path, "controller.pt")
+                torch.save(self.lyapunov_hybrid_system.system.controller_network, file_path)
+                utils.wandbUpload(file_path, os.path.dirname(base_path))
+        else:
+            data_path =os.path.join(self.save_network_path, "px4", '%d'%iter_count)
+            os.makedirs(data_path)
+            torch.save(self.lyapunov_hybrid_system.lyapunov_relu,
+                        data_path + f'{"/lyapunov.pt"}')
+            torch.save(self.R_options.R(),
+                        data_path + f'{"/R.pt"}')
+            if isinstance(self.lyapunov_hybrid_system.system,
+                            feedback_system.FeedbackSystem):
+                torch.save(
+                    self.lyapunov_hybrid_system.system.controller_network,
+                    data_path + f'{"/controller.pt"}')
         
-        if self.enable_wandb:
-            wandb.save(self.save_network_path + "/px4/"+str(iter_count)+"/R.pt", base_path=self.save_network_path, policy="now")
-            wandb.save(self.save_network_path + "/px4/"+str(iter_count)+"/controller.pt", base_path=self.save_network_path, policy="now")
-            wandb.save(self.save_network_path + "/px4/"+str(iter_count)+"/lyapunov.pt", base_path=self.save_network_path, policy="now")
 
     def print(self):
         """
@@ -1046,7 +1036,7 @@ class Trainer:
                 total_loss_return.lyap_loss.derivative_mip_obj)
 
     def train_lyapunov_on_samples(self, state_samples_all, num_epochs,
-                                  batch_size, last_epoch_saved=-1):
+                                  batch_size, last_epoch_saved=-1, wandb_dict=None):
         """
         Train a ReLU network on given state samples (not the adversarial states
         found by MIP). The loss function is the weighted sum of the lyapunov
@@ -1074,6 +1064,9 @@ class Trainer:
                                                   batch_size=batch_size,
                                                   shuffle=True)
         test_state_samples = test_dataset[:][0]
+        
+        if wandb_dict is not None:
+            utils.wandbInit(wandb_dict, resume=True)
         for epoch in range(last_epoch_saved + 1, last_epoch_saved + 1 + num_epochs):
             running_loss = 0.
             positivity_loss = 0.
@@ -1139,7 +1132,7 @@ class Trainer:
                 self.writer.add_scalar('samples_loss/test/positive', test_positivity_loss, global_step=epoch)
                 self.writer.add_scalar('samples_loss/test/derivative', test_derivative_loss, global_step=epoch)
             
-            if self.enable_wandb:
+            if wandb_dict is not None:
                 wandb.log({
                     "train_loss": running_loss,
                     "train_positivity_loss": positivity_loss,
@@ -1170,7 +1163,7 @@ class Trainer:
                     best_controller_relu = copy.deepcopy(
                         self.lyapunov_hybrid_system.system.controller_network)
                         
-            self._save_network(epoch)
+            self._save_network(epoch, wandb_dict=wandb_dict)
         
         print(f"best loss {best_loss}")
         self.lyapunov_hybrid_system.lyapunov_relu.load_state_dict(

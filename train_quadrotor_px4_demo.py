@@ -91,64 +91,21 @@ def load_data(path, n_in):
 
     return dati_input, dati_output
 
-def load_from_wandb(wandb_dict, last_epoch, models_path):
-    wandb_api = wandb.Api()
-    projects = wandb_api.projects(wandb_dict["entity"])
-    project_exists = any(p.name == wandb_dict["project"] for p in projects)
-    # If the project exists...
-    if project_exists:
-        # Search for the run in the project
-        runs = wandb_api.runs(wandb_dict["entity"] + "/" + wandb_dict["project"])
-        run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
-        if run_id is not None:
-            run = wandb_api.run(wandb_dict["entity"] + "/" + wandb_dict["project"] +"/" + run_id)
-            
-            file = run.file('px4/'+str(last_epoch)+'/R.pt')
-            if file.size != 0:
-                file.download(models_path, replace=True)
-            else:
-                print("R.pt does not exists")
-                return
 
-            file = run.file('px4/'+str(last_epoch)+'/controller.pt')
-            if file.size != 0:
-                file.download(models_path, replace=True)
-            else:
-                print("controller.pt does not exists")
-                return
-
-            file = run.file('px4/'+str(last_epoch)+'/lyapunov.pt')
-            if file.size != 0:
-                file.download(models_path, replace=True)
-            else:
-                print("lyapunov.pt does not exists")
-                return
-        else:
-            print("Run does not exists")
-            return
-    else:
-        print("Project does not exists")
-        return
-    return
-
+def loadDataAsTensors(path, n_in):
+    data_in, data_out = load_data(path, n_in)
+    return torch.utils.data.TensorDataset(
+        torch.tensor(data_in), torch.tensor(data_out))
 
 
 if __name__ == "__main__":
-
-    data_in, data_out = load_data('Dati_sistema_errore.csv', 7)
-    controller_in, controller_out = load_data(
-        'Dati_sistema_controllore_fixed.csv', 9)
-    cost_in, cost_out = load_data('Dati_sistema_lyapunov.csv', 9)
-
-    model_dataset = torch.utils.data.TensorDataset(
-        torch.tensor(data_in), torch.tensor(data_out))
-    controller_dataset = torch.utils.data.TensorDataset(
-        torch.tensor(controller_in), torch.tensor(controller_out))
-    cost_dataset = torch.utils.data.TensorDataset(
-        torch.tensor(cost_in), torch.tensor(cost_out))
+    # Import datasets
+    model_dataset = loadDataAsTensors('Dati_sistema_errore.csv', 7)
+    controller_dataset = loadDataAsTensors('Dati_sistema_controllore_fixed.csv', 9)
+    cost_dataset = loadDataAsTensors('Dati_sistema_lyapunov.csv', 9)
 
     train_on_samples = True
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float64
     dt = 0.01
     hover_thrust = -9.81
@@ -157,20 +114,17 @@ if __name__ == "__main__":
     V_lambda = 0.5
     x_lo = torch.tensor(
         [-.1, -.1, -1.2, -0.1, -0.1, -0.1, -0.1, -0.1, -0.1],
-        dtype=dtype)  # limiti inf
-
+        dtype=dtype) 
     x_up = torch.tensor(
         [.1, .1, -0.8, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], dtype=dtype)
-
     u_lo = torch.tensor([-2., -2., -2., 2.], dtype=dtype)
     u_up = torch.tensor([2., 2., 2., 18.], dtype=dtype)
-
     x_eq = torch.tensor(
         [0., 0., -1., 0., 0., 0., 0., 0., 0.],
         dtype=dtype)
-
     u_eq = torch.tensor([0, 0, 0, hover_thrust], dtype=dtype)
-
+    
+    # Define the models
     forward_model = utils.setup_relu((7, 14, 14, 6),
                                      params=None,
                                      bias=True,
@@ -191,42 +145,61 @@ if __name__ == "__main__":
                                        negative_slope=0.01,
                                        bias=True,
                                        dtype=dtype)
-    
+
+    # Wandb Initialization
     wandb.login(key="e3f943e00cb1fa8a14fd0ea76ed9ee6d50f86f5b")
-    
     wandb_dict = {"entity": "emacannizzo",
-              "project": "Lyapunov Quadrotor",
-              "run_name": "Prima Run"}
+                  "project": "Lyapunov Quadrotor",
+                  "run_name": "Training"}
+    wandb_dictPre = {"entity": "emacannizzo",
+                  "project": "Lyapunov Quadrotor",
+                  "run_name": "Training"}
+
+    load_models = True
+    load_pretrained = False
+    last_epoch_saved = 29
     
-    load_models = False
+    if load_models and wandb_dict is not None:
+        wandb_dictPre["run_name"] = "PreTrainingForward"
+        utils.wandbDownload(wandb_dictPre, "model.pt")
+        forward_model = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/model.pt", map_location=device)
 
-    if load_models:
+        if not load_pretrained and last_epoch_saved >= 0:
+            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/controller.pt")
+            controller_relu = torch.load(utils.wandbGetLocalPath(wandb_dict) + f"/{last_epoch_saved}/controller.pt", map_location=device)
+            
+            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/lyapunov.pt")
+            lyapunov_relu = torch.load(utils.wandbGetLocalPath(wandb_dict) + f"/{last_epoch_saved}/lyapunov.pt", map_location=device)
+            
+            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/R.pt")
+            R = torch.load(utils.wandbGetLocalPath(wandb_dict) + f"/{last_epoch_saved}/R.pt", map_location=device)
+        else:
+            wandb_dictPre["run_name"] = "PreTrainingController"
+            utils.wandbDownload(wandb_dictPre, "model.pt")
+            controller_relu = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/model.pt", map_location=device)
 
-        R = torch.load("R_26_12_2023.pt")
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        forward_model = torch.load("px4_forwardModel_trained.pt", map_location=device)
-        lyapunov_relu = torch.load("px4_lyapunov_func_trained.pt", map_location=device)
-        controller_relu = torch.load("px4_controller_trained.pt", map_location=device)
+            wandb_dictPre["run_name"] = "PreTrainingLyapunov"
+            utils.wandbDownload(wandb_dictPre, "model.pt")
+            lyapunov_relu = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/model.pt", map_location=device)
+            utils.wandbDownload(wandb_dictPre, "R.pt")      
+            R = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/R.pt", map_location=device)  
+            R = R[0]
     else:
         wandb_dict["run_name"] = "PreTrainingForward"
         train_forward_model(forward_model,
                             rpyu_equilibrium,
                             model_dataset,
                             num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
-        # torch.save(forward_model, 'px4_forwardModel_trained.pt')
 
         wandb_dict["run_name"] = "PreTrainingController"
         train_controller_approximator(
             controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
-        # torch.save(controller_relu, 'px4_controller_trained.pt')
 
         wandb_dict["run_name"] = "PreTrainingLyapunov"
         train_lqr_value_approximator(
             cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
-        # torch.save(lyapunov_relu, 'px4_lyapunov_func_trained.pt')
-        # torch.save(R, "R_26_12_2023.pt")
 
-    exit()
+
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(
         dtype, x_lo, x_up, u_lo, u_up, forward_model, hover_thrust, dt)
     forward_system.x_equilibrium = x_eq
@@ -266,13 +239,14 @@ if __name__ == "__main__":
     dut.lyapunov_derivative_epsilon = 0.001
     dut.lyapunov_derivative_eps_type = lyapunov.ConvergenceEps.ExpLower
     # dut.save_network_path = 'models'
-    state_samples_all = utils.uniform_sample_in_box(x_lo, x_up, 200000)
+    state_samples_all = utils.uniform_sample_in_box(x_lo, x_up, 200)
     dut.output_flag = True
 
+
     dut.train_lyapunov_on_samples(state_samples_all,
-                                      num_epochs=30,
-                                      batch_size=200)
-    
+                                  num_epochs=30,
+                                  batch_size=200, wandb_dict=wandb_dict,
+                                  last_epoch_saved=last_epoch_saved)
 
     # if train_on_samples:
     #     print("Training on samples start!!")

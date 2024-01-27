@@ -8,32 +8,31 @@ import wandb
 import os
 
 # Init wandb. If needed, the project or the run will be created.
-# If the project or the run exist, they will be resumed.
+# If resume is True, the run will be resumed if it exists, otherwise (False) it will be overwritten.
 # Important: call finish() before creating or resuming a new run.
 def wandbInit(wandb_dict, resume=True):
     wandb_api = wandb.Api()
     projects = wandb_api.projects(wandb_dict['entity'])
     project_exists = any(p.name == wandb_dict['project'] for p in projects)
 
+    if resume:
+        resume_str = "allow" # Resume the run if it exists, otherwise create a new one
+    else:
+        resume_str = None # Overwrite the run if it exists
+
     if project_exists:
         # Search for the run in the project
         runs = wandb_api.runs(wandb_dict['entity'] + "/" + wandb_dict['project'])
         run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
-        # If the run doesn't exist, create it
-        if (run_id is None or not resume):
-            run_indexes = [int(run.name[len(wandb_dict["run_name"]):]) for run in runs if run.name.startswith(wandb_dict["run_name"])]
-            new_run_index = max(run_indexes) + 1 if run_indexes else 0
-            wandb_dict["run_name"] = f"{wandb_dict['run_name']}{new_run_index}"
+        if (run_id is None): # If the run doesn't exist, create it
             print(f"Wandb: creating new run: {wandb_dict['run_name']}")
             wandb.init(project=wandb_dict['project'], name=wandb_dict["run_name"], sync_tensorboard=True)
-        # If the run exists, resume it
-        else:
+        else: # If the run exists, resume or create it
             print(f"Wandb: resuming run: {wandb_dict['run_name']}")
-            wandb.init(project=wandb_dict['project'], id=run_id, resume="must", sync_tensorboard=True)
-        wandb.init(project=wandb_dict['project'], name=wandb_dict['run_name'], resume="allow", sync_tensorboard=True)
+            wandb.init(project=wandb_dict['project'], id=run_id, resume=resume_str, sync_tensorboard=True)
     else:
         print(f"Wandb: creating new project and run: {wandb_dict['project']}/{wandb_dict['run_name']}")
-        wandb.init(project=wandb_dict['project'], name=f"{wandb_dict['run_name']}0", sync_tensorboard=True)
+        wandb.init(project=wandb_dict['project'], name=f"{wandb_dict['run_name']}", sync_tensorboard=True)
     subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
     create_subdirectories(".", subdirectories)
 
@@ -54,14 +53,12 @@ def create_subdirectories(base_path, subdirectories):
             # Create the directory and its parents if they don't exist
             os.makedirs(base_path)
             print(f"Directory created: {base_path}")
-        else:
-            print(f"Directory already exists: {base_path}")
 
 # Download a file from wandb given the project, the run and the path of the file.
 def wandbDownload(wandb_dict, wandb_path):
     subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
-    file_path = os.path.join(*subdirectories)
     create_subdirectories(".", subdirectories)
+    file_path = wandbGetLocalPath(wandb_dict)
 
     wandb_api = wandb.Api()
     projects = wandb_api.projects(wandb_dict["entity"])
@@ -71,7 +68,6 @@ def wandbDownload(wandb_dict, wandb_path):
         run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
         if run_id is not None:
             run = wandb_api.run(wandb_dict["entity"] + "/" + wandb_dict["project"] +"/" + run_id)
-            
             file = run.file(wandb_path)
             if file.size != 0:
                 file.download(file_path, replace=True)
@@ -86,6 +82,9 @@ def wandbDownload(wandb_dict, wandb_path):
         return
     return
 
+def wandbGetLocalPath(wandb_dict):
+    subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
+    return os.path.join(*subdirectories)
 
 def update_progress(progress):
     bar_length = 40
@@ -1422,11 +1421,14 @@ def train_approximator(dataset,
             })
         model_params.append(extract_relu_parameters(model))
     if wandb_dict is not None:
-        subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
-        file_path = os.path.join(*subdirectories, "model.pt")
+        file_path = os.path.join(wandbGetLocalPath(wandb_dict), "model.pt")
         torch.save(model, file_path)
-
         wandbUpload(file_path, os.path.dirname(file_path))
+
+        if additional_variable is not None:
+            file_path = os.path.join(wandbGetLocalPath(wandb_dict), "R.pt")
+            torch.save(additional_variable, file_path)
+            wandbUpload(file_path, os.path.dirname(file_path))
         wandb.finish()
 
     
