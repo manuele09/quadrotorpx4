@@ -867,6 +867,10 @@ class Trainer:
                 file_path = os.path.join(base_path, "controller.pt")
                 torch.save(self.lyapunov_hybrid_system.system.controller_network, file_path)
                 utils.wandbUpload(file_path, os.path.dirname(base_path))
+
+                paths = utils.controllerToCsv(self.lyapunov_hybrid_system.system.controller_network, base_path)
+                for path in paths:
+                    utils.wandbUpload(path, os.path.dirname(base_path))
         else:
             data_path =os.path.join(self.save_network_path, "px4", '%d'%iter_count)
             os.makedirs(data_path)
@@ -1172,6 +1176,8 @@ class Trainer:
                       feedback_system.FeedbackSystem):
             self.lyapunov_hybrid_system.system.controller_network.\
                 load_state_dict(best_controller_relu.state_dict())
+        if wandb_dict is not None:
+            wandb.finish()
 
     class AdversarialTrainingOptions:
         def __init__(self):

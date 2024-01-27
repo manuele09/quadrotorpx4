@@ -80,7 +80,7 @@ def train_controller_approximator(control_dataset, controller_relu, state_eq, co
                              batch_size=batch_size,
                              num_epochs=num_epochs,
                              lr=lr,
-                             wandb_dict=wandb_dict)
+                             wandb_dict=wandb_dict, save_csv=True)
 
 
 def load_data(path, n_in):
@@ -155,9 +155,9 @@ if __name__ == "__main__":
                   "project": "Lyapunov Quadrotor",
                   "run_name": "Training"}
 
-    load_models = True
+    load_models = False
     load_pretrained = False
-    last_epoch_saved = 29
+    last_epoch_saved = -1
     
     if load_models and wandb_dict is not None:
         wandb_dictPre["run_name"] = "PreTrainingForward"
@@ -185,19 +185,19 @@ if __name__ == "__main__":
             R = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/R.pt", map_location=device)  
             R = R[0]
     else:
-        wandb_dict["run_name"] = "PreTrainingForward"
+        wandb_dictPre["run_name"] = "PreTrainingForward"
         train_forward_model(forward_model,
                             rpyu_equilibrium,
                             model_dataset,
-                            num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
+                            num_epochs=5, batch_size=200, wandb_dict=wandb_dictPre)
 
-        wandb_dict["run_name"] = "PreTrainingController"
+        wandb_dictPre["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=5, batch_size=200, wandb_dict=wandb_dictPre)
 
-        wandb_dict["run_name"] = "PreTrainingLyapunov"
+        wandb_dictPre["run_name"] = "PreTrainingLyapunov"
         train_lqr_value_approximator(
-            cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=5, batch_size=200, wandb_dict=wandb_dict)
+            cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=5, batch_size=200, wandb_dict=wandb_dictPre)
 
 
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(

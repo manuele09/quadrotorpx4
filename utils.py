@@ -6,6 +6,7 @@ import gurobi_torch_mip as gurobi_torch_mip
 import scipy.integrate
 import wandb
 import os
+import pandas as pd
 
 # Init wandb. If needed, the project or the run will be created.
 # If resume is True, the run will be resumed if it exists, otherwise (False) it will be overwritten.
@@ -85,6 +86,24 @@ def wandbDownload(wandb_dict, wandb_path):
 def wandbGetLocalPath(wandb_dict):
     subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
     return os.path.join(*subdirectories)
+
+def controllerToCsv(controller, path):
+    model_state_dict = controller.state_dict()
+    names = ["W1", "W2", "B1", "B2"]
+    paths = []
+    for name in names:
+        paths.append(os.path.join(path, name + ".csv"))
+
+    parameters = [model_state_dict['0.weight'],
+              model_state_dict['2.weight'],
+              model_state_dict['0.bias'],
+              model_state_dict['2.bias']]
+    
+    for path, par in zip(paths, parameters):
+        df = pd.DataFrame(par.numpy())
+        df.to_csv(path, index=False, header=False)
+
+    return paths
 
 def update_progress(progress):
     bar_length = 40
@@ -1356,7 +1375,8 @@ def train_approximator(dataset,
                        additional_variable=None,
                        output_fun_args=dict(),
                        verbose=True,
-                       wandb_dict=None):
+                       wandb_dict=None,
+                       save_csv=False):
     """
     @param additional_variable A list of torch tensors (with
     requires_grad=True), such that we will optimize the model together with
@@ -1425,10 +1445,17 @@ def train_approximator(dataset,
         torch.save(model, file_path)
         wandbUpload(file_path, os.path.dirname(file_path))
 
+        if save_csv:
+            paths = controllerToCsv(model, wandbGetLocalPath(wandb_dict))
+            for path in paths:
+                wandbUpload(path, os.path.dirname(path))
+                
         if additional_variable is not None:
             file_path = os.path.join(wandbGetLocalPath(wandb_dict), "R.pt")
             torch.save(additional_variable, file_path)
             wandbUpload(file_path, os.path.dirname(file_path))
+
+        
         wandb.finish()
 
     
