@@ -119,9 +119,14 @@ if __name__ == "__main__":
         [.1, .1, -0.8, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], dtype=dtype)
     u_lo = torch.tensor([-2., -2., -2., 2.], dtype=dtype)
     u_up = torch.tensor([2., 2., 2., 18.], dtype=dtype)
+    
     x_eq = torch.tensor(
-        [0., 0., -1., 0., 0., 0., 0., 0., 0.],
+        [0., 0., -1., 0., 0., 1.5708, 0., 0., 0.],
         dtype=dtype)
+    #Sbagliato
+    # x_eq = torch.tensor(
+    #     [0., 0., -1., 0., 0., 0., 0., 0., 0.],
+    #     dtype=dtype)
     u_eq = torch.tensor([0, 0, 0, hover_thrust], dtype=dtype)
 
     # Define the models
