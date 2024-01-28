@@ -87,6 +87,15 @@ def wandbGetLocalPath(wandb_dict):
     subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
     return os.path.join(*subdirectories)
 
+def tensorToCsv(tensor, path):
+    df = pd.DataFrame(tensor.numpy())
+    df.to_csv(path, index=False, header=False)
+
+def csvToTensor(file_path, dtype=torch.float64):
+    df = pd.read_csv(file_path, header=None)
+    tensor = torch.tensor(df.values, dtype=dtype)
+    return tensor
+
 def controllerToCsv(controller, path):
     model_state_dict = controller.state_dict()
     names = ["W1", "W2", "B1", "B2"]
@@ -100,9 +109,7 @@ def controllerToCsv(controller, path):
               model_state_dict['2.bias']]
     
     for path, par in zip(paths, parameters):
-        df = pd.DataFrame(par.numpy())
-        df.to_csv(path, index=False, header=False)
-
+        tensorToCsv(par, path)
     return paths
 
 def update_progress(progress):

@@ -1071,6 +1071,8 @@ class Trainer:
         
         if wandb_dict is not None:
             utils.wandbInit(wandb_dict, resume=True)
+            utils.tensorToCsv(state_samples_all, utils.wandbGetLocalPath(wandb_dict) + "/state_samples_all.csv")
+            utils.wandbUpload(utils.wandbGetLocalPath(wandb_dict) + "/state_samples_all.csv", utils.wandbGetLocalPath(wandb_dict))
         for epoch in range(last_epoch_saved + 1, last_epoch_saved + 1 + num_epochs):
             running_loss = 0.
             positivity_loss = 0.

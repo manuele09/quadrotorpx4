@@ -12,9 +12,9 @@ import argparse
 import gurobipy
 import wandb
 import sys
+import csv
 
 # roll pitch yaw u of equilibrium
-
 
 def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
                         num_epochs=100, batch_size=20, lr=0.005, wandb_dict=None):
@@ -100,9 +100,9 @@ def loadDataAsTensors(path, n_in):
 
 if __name__ == "__main__":
     # Import datasets
-    model_dataset = loadDataAsTensors('1/Dataset/error.csv', 7)
-    controller_dataset = loadDataAsTensors('1/Dataset/controller.csv', 9)
-    cost_dataset = loadDataAsTensors('1/Dataset/lyapunov.csv', 9)
+    model_dataset = loadDataAsTensors('Dataset/1/error.csv', 7)
+    controller_dataset = loadDataAsTensors('Dataset/1/controller.csv', 9)
+    cost_dataset = loadDataAsTensors('Dataset/1/lyapunov.csv', 9)
 
     train_on_samples = True
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -123,7 +123,7 @@ if __name__ == "__main__":
         [0., 0., -1., 0., 0., 0., 0., 0., 0.],
         dtype=dtype)
     u_eq = torch.tensor([0, 0, 0, hover_thrust], dtype=dtype)
-    
+
     # Define the models
     forward_model = utils.setup_relu((7, 14, 14, 6),
                                      params=None,
@@ -155,8 +155,8 @@ if __name__ == "__main__":
                   "project": "Lyapunov Quadrotor",
                   "run_name": "Training"}
 
-    load_models = False
-    load_pretrained = False
+    load_models = True
+    load_pretrained = True
     last_epoch_saved = -1
     
     if load_models and wandb_dict is not None:
@@ -239,10 +239,11 @@ if __name__ == "__main__":
     dut.lyapunov_derivative_epsilon = 0.001
     dut.lyapunov_derivative_eps_type = lyapunov.ConvergenceEps.ExpLower
     # dut.save_network_path = 'models'
-    state_samples_all = utils.uniform_sample_in_box(x_lo, x_up, 200)
     dut.output_flag = True
 
-
+    utils.wandbDownload(wandb_dict, "state_samples_all.csv") 
+    state_samples_all = utils.csvToTensor(utils.wandbGetLocalPath(wandb_dict) + "/state_samples_all.csv", dtype=dtype)
+    # state_samples_all = utils.uniform_sample_in_box(x_lo, x_up, 50)
     dut.train_lyapunov_on_samples(state_samples_all,
                                   num_epochs=30,
                                   batch_size=200, wandb_dict=wandb_dict,
