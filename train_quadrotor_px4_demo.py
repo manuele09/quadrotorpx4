@@ -100,9 +100,9 @@ def loadDataAsTensors(path, n_in):
 
 if __name__ == "__main__":
     # Import datasets
-    model_dataset = loadDataAsTensors('Dati_sistema_errore.csv', 7)
-    controller_dataset = loadDataAsTensors('Dati_sistema_controllore_fixed.csv', 9)
-    cost_dataset = loadDataAsTensors('Dati_sistema_lyapunov.csv', 9)
+    model_dataset = loadDataAsTensors('1/Dataset/error.csv', 7)
+    controller_dataset = loadDataAsTensors('1/Dataset/controller.csv', 9)
+    cost_dataset = loadDataAsTensors('1/Dataset/lyapunov.csv', 9)
 
     train_on_samples = True
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -189,11 +189,11 @@ if __name__ == "__main__":
         train_forward_model(forward_model,
                             rpyu_equilibrium,
                             model_dataset,
-                            num_epochs=5, batch_size=200, wandb_dict=wandb_dictPre)
+                            num_epochs=40, batch_size=200, wandb_dict=wandb_dictPre)
 
         wandb_dictPre["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=5, batch_size=200, wandb_dict=wandb_dictPre)
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=40, batch_size=200, wandb_dict=wandb_dictPre)
 
         wandb_dictPre["run_name"] = "PreTrainingLyapunov"
         train_lqr_value_approximator(
