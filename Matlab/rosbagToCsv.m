@@ -36,7 +36,7 @@ input0 = Uref(:, 1) - KeYaw;
 input1 = Uref(:, 2) - KeRoll;
 input2 = Uref(:, 3) - KePitch;
 input3 = Uref(:, 4) - KeThrust;
-dataMatrix = [error, input0, input1, input2, input3];
+dataMatrix = [position, input0, input1, input2, input3];
 
 filePath = 'controller_e.csv';
 writematrix(dataMatrix, filePath, 'WriteMode', 'append', 'Delimiter', ',');
