@@ -19,6 +19,7 @@ class Quadrotor:
     is a linear constraint, and we don't need to use a neural network to encode
     this update.
     """
+
     def __init__(self, dtype):
         """
         The parameter of this quadrotor is obtained from
@@ -55,7 +56,7 @@ class Quadrotor:
                                         -self.z_torque_to_force_factor,
                                         self.z_torque_to_force_factor,
                                         -self.z_torque_to_force_factor
-                                    ]]) @ u
+            ]]) @ u
             R = geometry_transform.rpy2rotmat(rpy)
             pos_ddot = np.array([
                 0, 0, -self.gravity
@@ -86,7 +87,7 @@ class Quadrotor:
                      -self.z_torque_to_force_factor,
                      self.z_torque_to_force_factor,
                      -self.z_torque_to_force_factor
-                 ]],
+                ]],
                 dtype=x.dtype) @ u
             R = geometry_transform.rpy2rotmat(rpy)
             pos_ddot = torch.tensor(
@@ -142,7 +143,7 @@ class Quadrotor:
              [
                  0, sin_roll * tan_pitch * sec_pitch,
                  cos_roll * tan_pitch * sec_pitch
-             ]]) @ omega
+            ]]) @ omega
         A[3:6, 3] = drpy_dot_droll
         A[3:6, 4] = drpy_dot_dpitch
         drpy_dot_domega = np.array(
@@ -204,6 +205,7 @@ class QuadrotorWithPixhawkReLUSystem:
     where ϕ is the neural network. Notice that ϕ doesn't output the next state
     directly.
     """
+
     def __init__(self, dtype, x_lo: torch.Tensor, x_up: torch.Tensor,
                  u_lo: torch.Tensor, u_up: torch.Tensor,
                  dynamics_relu: torch.nn.Sequential, hover_thrust: float,
@@ -240,8 +242,7 @@ class QuadrotorWithPixhawkReLUSystem:
         assert (isinstance(dt, float))
         assert (dt > 0)
         self.dt = dt
-        self.network_bound_propagate_method =\
-            mip_utils.PropagateBoundsMethod.IA
+        self.network_bound_propagate_method = mip_utils.PropagateBoundsMethod.IA #Alessia
 
     @property
     def x_lo_all(self):
@@ -269,7 +270,7 @@ class QuadrotorWithPixhawkReLUSystem:
                 torch.cat((rpy_current, u_start), dim=0)) - self.dynamics_relu(
                     torch.cat((torch.zeros(
                         (3, ), dtype=self.dtype), self.u_equilibrium),
-                              dim=0))
+                        dim=0))
             vel_next = vel_current + delta_vel_rpy[:3]
             rpy_next = rpy_current + delta_vel_rpy[3:]
             pos_next = pos_current + (vel_next + vel_current) / 2 * self.dt
@@ -285,7 +286,7 @@ class QuadrotorWithPixhawkReLUSystem:
                 torch.cat((rpy_current, u_start), dim=1)) - self.dynamics_relu(
                     torch.cat((torch.zeros(
                         (3, ), dtype=self.dtype), self.u_equilibrium),
-                              dim=0))
+                        dim=0))
             vel_next = vel_current + delta_vel_rpy[:, :3]
             rpy_next = rpy_current + delta_vel_rpy[:, 3:6]
             pos_next = pos_current + (vel_next + vel_current) / 2 * self.dt
@@ -293,7 +294,6 @@ class QuadrotorWithPixhawkReLUSystem:
 
     def possible_dx(self, x, u):
         return [self.step_forward(x, u)]
-    
 
     def _add_dynamics_constraint_given_relu_bounds(
             self, mip, x_var, x_next_var, u_var, slack_var_name,
@@ -304,7 +304,7 @@ class QuadrotorWithPixhawkReLUSystem:
             relu_input_lo, relu_input_up, network_input_lo, network_input_up)
         # First add mip_cnstr_result, but don't impose the constraint on the
         # output of the network (we will impose the constraint separately)
-        input_vars = x_var[3:6] + u_var #FIXED
+        input_vars = x_var[3:6] + u_var  # FIXED
         forward_slack, forward_binary = \
             mip.add_mixed_integer_linear_constraints(
                 mip_cnstr_result, input_vars, None, slack_var_name,
@@ -326,14 +326,14 @@ class QuadrotorWithPixhawkReLUSystem:
                 -mip_cnstr_result.Aout_slack
             ], [x_next_var[3:9], posdot_curr, forward_slack],
             b=mip_cnstr_result.Cout - self.dynamics_relu(
-                torch.cat((self.x_equilibrium[3:6], #FIXED
+                torch.cat((self.x_equilibrium[3:6],  # FIXED
                            self.u_equilibrium))),
             sense=gurobipy.GRB.EQUAL,
             name="quadrotor_dynamics_output")
-        
-        #QUESTO VA BENE
+
+        # QUESTO VA BENE
         # Now add the constraint
-        # pos[n+1] - pos[n] = (posdot[n+1] + posdot[n]) * dt / 2 
+        # pos[n+1] - pos[n] = (posdot[n+1] + posdot[n]) * dt / 2
         pos_next = x_next_var[:3]
         pos_curr = x_var[:3]
         mip.addMConstr([
@@ -341,62 +341,62 @@ class QuadrotorWithPixhawkReLUSystem:
             -self.dt / 2 * torch.eye(3, dtype=self.dtype),
             -self.dt / 2 * torch.eye(3, dtype=self.dtype)
         ], [pos_next, pos_curr, posdot_next, posdot_curr],
-                        b=torch.zeros((3, ), dtype=self.dtype),
-                        sense=gurobipy.GRB.EQUAL,
-                        name="update_pos")
-        
+            b=torch.zeros((3, ), dtype=self.dtype),
+            sense=gurobipy.GRB.EQUAL,
+            name="update_pos")
+
         ret = relu_system.ReLUDynamicsConstraintReturn(
             forward_slack, forward_binary)
         ret.from_mip_cnstr_return(mip_cnstr_result, input_vars)
         ret.relu_output_lo = relu_output_lo
         ret.relu_output_up = relu_output_up
         return ret
-         
 
     def add_dynamics_constraint(self,
-                                    mip,
-                                    x_var,
-                                    x_next_var,
-                                    u_var,
-                                    slack_var_name,
-                                    binary_var_name,
-                                    additional_u_lo: torch.Tensor = None,
-                                    additional_u_up: torch.Tensor = None,
-                                    create_lp_prog_callback=None,
-                                    binary_var_type=gurobipy.GRB.BINARY,
-                                    u_input_prog=None):
-            """
-            Add the dynamics constraints
-            pos[n+1] = pos[n] + (pos_dot[n] + pos_dot[n+1]) / 2 * dt
-            (rpy[n+1], pos_dot[n+1] - pos_dot[n], angular_vel[n+1])
-            = ϕ(rpy[n],, angular_vel[n], thrust[n]) - ϕ(0, 0, hover_thrust)
-            @param additional_u_lo The additional lower bound on u.
-            @param additional_u_up The additional upper bound on u.
-            @param create_lp_prog_callback Only used when propagating the bounds of
-            the network ReLU inputs using LP. This callback will be used to add
-            additional constraints to the LP. The additional constraints include
-            those from the feedback system when connecting this forward system with
-            a controller.
-            """
-            u_lo = self.u_lo if additional_u_lo is None else torch.max(
-                self.u_lo, additional_u_lo)
-            u_up = self.u_up if additional_u_up is None else torch.min(
-                self.u_up, additional_u_up)
+                                mip,
+                                x_var,
+                                x_next_var,
+                                u_var,
+                                slack_var_name,
+                                binary_var_name,
+                                additional_u_lo: torch.Tensor = None,
+                                additional_u_up: torch.Tensor = None,
+                                create_lp_prog_callback=None,
+                                binary_var_type=gurobipy.GRB.BINARY,
+                                u_input_prog=None):
+        """
+        Add the dynamics constraints
+        pos[n+1] = pos[n] + (pos_dot[n] + pos_dot[n+1]) / 2 * dt
+        (rpy[n+1], pos_dot[n+1] - pos_dot[n], angular_vel[n+1])
+        = ϕ(rpy[n],, angular_vel[n], thrust[n]) - ϕ(0, 0, hover_thrust)
+        @param additional_u_lo The additional lower bound on u.
+        @param additional_u_up The additional upper bound on u.
+        @param create_lp_prog_callback Only used when propagating the bounds of
+        the network ReLU inputs using LP. This callback will be used to add
+        additional constraints to the LP. The additional constraints include
+        those from the feedback system when connecting this forward system with
+        a controller.
+        """
+        u_lo = self.u_lo if additional_u_lo is None else torch.max(
+            self.u_lo, additional_u_lo)
+        u_up = self.u_up if additional_u_up is None else torch.min(
+            self.u_up, additional_u_up)
 
-            #questi vanno cambiati - io ho 9 valori non 12 FIXED
-            network_input_lo = torch.cat((self.x_lo[3:6], u_lo))
-            network_input_up = torch.cat((self.x_up[3:6], u_up))
+        # questi vanno cambiati - io ho 9 valori non 12 FIXED
+        network_input_lo = torch.cat((self.x_lo[3:6], u_lo))
+        network_input_up = torch.cat((self.x_up[3:6], u_up))
 
-            relu_input_lo, relu_input_up, relu_output_lo, relu_output_up =\
-                self.dynamics_relu_free_pattern._compute_layer_bound(
-                    network_input_lo, network_input_up,
-                    self.network_bound_propagate_method,
-                    create_prog_callback=create_lp_prog_callback)
+        relu_input_lo, relu_input_up, relu_output_lo, relu_output_up =\
+            self.dynamics_relu_free_pattern._compute_layer_bound(
+                network_input_lo, network_input_up,
+                self.network_bound_propagate_method,
+                create_prog_callback=create_lp_prog_callback)
 
-            return self._add_dynamics_constraint_given_relu_bounds(
-                mip, x_var, x_next_var, u_var, slack_var_name, binary_var_name,
-                relu_input_lo, relu_input_up, relu_output_lo, relu_output_up,
-                network_input_lo, network_input_up, binary_var_type)
+        return self._add_dynamics_constraint_given_relu_bounds(
+            mip, x_var, x_next_var, u_var, slack_var_name, binary_var_name,
+            relu_input_lo, relu_input_up, relu_output_lo, relu_output_up,
+            network_input_lo, network_input_up, binary_var_type)
+
 
 class QuadrotorReLUSystem:
     """
@@ -411,6 +411,7 @@ class QuadrotorReLUSystem:
     where ϕ is the neural network. Note here we use the fact that the quadrotor
     acceleration doesn't depend on its position and linear velocity.
     """
+
     def __init__(self, dtype, x_lo: torch.Tensor, x_up: torch.Tensor,
                  u_lo: torch.Tensor, u_up: torch.Tensor,
                  dynamics_relu: torch.nn.Sequential, hover_thrust: float,
@@ -549,9 +550,9 @@ class QuadrotorReLUSystem:
             -self.dt / 2 * torch.eye(3, dtype=self.dtype),
             -self.dt / 2 * torch.eye(3, dtype=self.dtype)
         ], [pos_next, pos_curr, posdot_next, posdot_curr],
-                        b=torch.zeros((3, ), dtype=self.dtype),
-                        sense=gurobipy.GRB.EQUAL,
-                        name="update_pos")
+            b=torch.zeros((3, ), dtype=self.dtype),
+            sense=gurobipy.GRB.EQUAL,
+            name="update_pos")
         ret = relu_system.ReLUDynamicsConstraintReturn(
             forward_slack, forward_binary)
         ret.from_mip_cnstr_return(mip_cnstr_result, input_vars)

@@ -7,6 +7,7 @@ import scipy.integrate
 import wandb
 import os
 import pandas as pd
+import hTorch.htorch.layers as qlayers
 
 # Init wandb. If needed, the project or the run will be created.
 # If resume is True, the run will be resumed if it exists, otherwise (False) it will be overwritten.
@@ -111,6 +112,66 @@ def controllerToCsv(controller, path):
     for path, par in zip(paths, parameters):
         tensorToCsv(par, path)
     return paths
+
+def extractQuaternionWeights(model):
+    d = model.state_dict()
+    num_layers = int(len(d.keys())/4)
+
+    weigths = {}
+    weigths["r_weight"] = []
+    weigths["i_weight"] = []
+    weigths["j_weight"] = []
+    weigths["k_weight"] = []
+    weigths["bias"] = []
+
+    for i in range(num_layers):
+        weigths["r_weight"].append(d[f"{i*2}.r_weight"])
+        weigths["i_weight"].append(d[f"{i*2}.i_weight"])
+        weigths["j_weight"].append(d[f"{i*2}.j_weight"])
+        weigths["k_weight"].append(d[f"{i*2}.k_weight"])
+        weigths["bias"].append(d[f"{i*2}.bias"])
+    return weigths
+
+def controllerQuaternionToCsv(controller, path):
+    weigths = extractQuaternionWeights(controller)
+    w = []
+    for i in range(2):
+        w.append(torch.cat([torch.cat([weigths["r_weight"][i], -weigths["i_weight"][i], -weigths["j_weight"][i],  -weigths["k_weight"][i]], dim=0),
+                            torch.cat([weigths["i_weight"][i],  weigths["r_weight"][i], -weigths["k_weight"][i],   weigths["j_weight"][i]], dim=0),
+                            torch.cat([weigths["j_weight"][i],  weigths["k_weight"][i],  weigths["r_weight"][i],  -weigths["i_weight"][i]], dim=0),
+                            torch.cat([weigths["k_weight"][i], -weigths["j_weight"][i],  weigths["i_weight"][i],   weigths["r_weight"][i]], dim=0)], dim = 1))
+    
+
+
+    names = ["W1", "W2", "B1", "B2"]
+    paths = []
+    for name in names:
+        paths.append(os.path.join(path, name + ".csv"))
+
+    parameters = [w[0], w[1], weigths["bias"][0], weigths["bias"][1]]
+    for i in range(len(parameters)):
+        parameters[i] = torch.t(parameters[i])
+    
+    for path, par in zip(paths, parameters):
+        tensorToCsv(par, path)
+    return paths
+
+def modelToCsv(model, path):
+    model_state_dict = model.state_dict()
+    names = [f"W{i}" for i in range(len(model_state_dict)//2)] + [f"B{i}" for i in range(len(model_state_dict)//2)]
+    paths = []
+    
+    for name in names:
+        paths.append(os.path.join(path, name + ".csv"))
+
+    parameters = [model_state_dict[f"{i}.weight"] for i in range(0, len(model_state_dict), 2)] + \
+                 [model_state_dict[f"{i}.bias"] for i in range(0, len(model_state_dict), 2)]
+
+    for path, par in zip(paths, parameters):
+        tensorToCsv(par, path)
+    
+    return paths
+
 
 def update_progress(progress):
     bar_length = 40
@@ -1101,6 +1162,52 @@ def setup_relu(relu_layer_width: tuple,
     relu = torch.nn.Sequential(*layers)
     return relu
 
+def setup_relu_quaternion(relu_layer_width: tuple,
+               params=None,
+               negative_slope: float = 0.01,
+               bias: bool = True,
+               dtype=torch.float64):
+    """
+    Setup a relu network.
+    @param negative_slope The negative slope of the leaky relu units.
+    @param bias whether the linear layer has bias or not.
+    """
+    assert (isinstance(relu_layer_width, tuple))
+    if params is not None:
+        assert (isinstance(params, torch.Tensor))
+
+    def set_param(linear, param_count): #Non verificata correttezza con quaternioni perchè non usata
+        linear.weight.data = params[param_count:param_count +
+                                    linear.in_features *
+                                    linear.out_features].clone().reshape(
+                                        (linear.out_features,
+                                         linear.in_features))
+        param_count += linear.in_features * linear.out_features
+        if bias:
+            linear.bias.data = params[param_count:param_count +
+                                      linear.out_features].clone()
+            param_count += linear.out_features
+        return param_count
+
+    linear_layers = [None] * (len(relu_layer_width) - 1)
+    param_count = 0
+    for i in range(len(linear_layers)):
+        next_layer_width = relu_layer_width[i + 1]
+        linear_layers[i] = qlayers.QLinear(relu_layer_width[i],
+                                           next_layer_width,
+                                           bias=bias).type(dtype)
+        if params is None:
+            pass
+        else:
+            param_count = set_param(linear_layers[i], param_count)
+    layers = [None] * (len(linear_layers) * 2 - 1)
+    for i in range(len(linear_layers) - 1):
+        layers[2 * i] = linear_layers[i]
+        layers[2 * i + 1] = torch.nn.LeakyReLU(negative_slope)
+    layers[-1] = linear_layers[-1]
+    relu = torch.nn.Sequential(*layers)
+    return relu
+
 
 def update_relu_params(relu, params: torch.Tensor):
     """
@@ -1122,6 +1229,19 @@ def update_relu_params(relu, params: torch.Tensor):
 
 
 def extract_relu_parameters(relu):
+    """
+    For a feedforward network with (leaky) relu activation units, extract the
+    weights and bias into one tensor.
+    """
+    weights_biases = []
+    for layer in relu:
+        if isinstance(layer, torch.nn.Linear):
+            weights_biases.append(layer.weight.data.reshape((-1)))
+            if layer.bias is not None:
+                weights_biases.append(layer.bias.data.reshape((-1)))
+    return torch.cat(weights_biases)
+
+def extract_relu_quaternion_parameters(relu):
     """
     For a feedforward network with (leaky) relu activation units, extract the
     weights and bias into one tensor.
@@ -1412,7 +1532,7 @@ def train_approximator(dataset,
     optimizer = torch.optim.Adam(variables, lr=lr)
     loss = torch.nn.MSELoss()
 
-    model_params = []
+    # model_params = []
     for epoch in range(num_epochs):
         running_loss = 0.
         for i, data in enumerate(train_loader, 0):
@@ -1446,7 +1566,9 @@ def train_approximator(dataset,
                 "train_loss": running_loss / len(train_loader),
                 "test_loss": test_loss
             })
-        model_params.append(extract_relu_parameters(model))
+        # model_params.append(extract_relu_parameters(model))
+
+    controllerQuaternionToCsv(model, "Weights/Quaternion")
     if wandb_dict is not None:
         file_path = os.path.join(wandbGetLocalPath(wandb_dict), "model.pt")
         torch.save(model, file_path)
