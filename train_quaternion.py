@@ -17,6 +17,7 @@ import hTorch.htorch.quaternion as quaternion
 
 # roll pitch yaw u of equilibrium
 
+
 def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
                         num_epochs=100, batch_size=20, lr=0.005, wandb_dict=None):
     # The forward model maps (roll[n], pitch[n], yaw[n],
@@ -98,8 +99,6 @@ def loadDataAsTensors(path, n_in):
     return torch.utils.data.TensorDataset(
         torch.tensor(data_in), torch.tensor(data_out))
 
-q = torch.tensor([0.5])
-
 
 def loadDataForward(path):
     Dati = pd.read_csv(path, sep=',', header=None)
@@ -109,18 +108,23 @@ def loadDataForward(path):
 
     input_quaternion = []
     for i in range(input.shape[0]):
-        q2 = quaternion.QuaternionTensor(torch.cat((torch.tensor([q]), input[i, 3:6]), dim=0))
-        qa = quaternion.QuaternionTensor(torch.cat((torch.tensor([q]), output[i]), dim=0))
+        q2 = quaternion.QuaternionTensor(
+            torch.cat((torch.tensor([q]), input[i, 3:6]), dim=0))
+        qa = quaternion.QuaternionTensor(
+            torch.cat((torch.tensor([q]), output[i]), dim=0))
         input_quaternion.append([q2, qa])
 
     output_quaternion = []
     for i in range(output.shape[0]):
-        q2 = quaternion.QuaternionTensor(torch.cat((torch.tensor([q]), input[i, 3:6]), dim=0))
-        q3 = quaternion.QuaternionTensor(torch.cat((torch.tensor([q]), input[i, 6:9]), dim=0))
+        q2 = quaternion.QuaternionTensor(
+            torch.cat((torch.tensor([q]), input[i, 3:6]), dim=0))
+        q3 = quaternion.QuaternionTensor(
+            torch.cat((torch.tensor([q]), input[i, 6:9]), dim=0))
         output_quaternion.append([q3, q2])
 
     return torch.utils.data.TensorDataset(
         input_quaternion, output_quaternion)
+
 
 def loadDatacontroller(path):
     Dati = pd.read_csv(path, sep=',', header=None)
@@ -130,14 +134,16 @@ def loadDatacontroller(path):
 
     input_quaternion = []
     for i in range(input.shape[0]):
-        q = np.concatenate((np.array([0.5]), input[i, 0:3], np.array([0.5]), input[i, 3:6], np.array([0.5]), input[i, 6:9]))
+        q = stateToQuaternion(input[i])
         input_quaternion.append(q)
 
     output_quaternion = []
     for i in range(output.shape[0]):
-        output_quaternion.append(output[i, :])
+        q = actionToQuaternion(output[i])
+        output_quaternion.append(q)
     return torch.utils.data.TensorDataset(
         torch.tensor(np.array(input_quaternion)), torch.tensor(np.array(output_quaternion)))
+
 
 def loadDataLyapunov(path):
     Dati = pd.read_csv(path, sep=',', header=None)
@@ -147,9 +153,12 @@ def loadDataLyapunov(path):
 
     input_quaternion = []
     for i in range(input.shape[0]):
-        q1 = quaternion.QuaternionTensor(torch.cat((torch.tensor([q]), input[i, 0:3]), dim=0))
-        q2 = quaternion.QuaternionTensor(torch.cat((torch.tensor([q]), input[i, 3:6]), dim=0))
-        q3 = quaternion.QuaternionTensor(torch.cat((torch.tensor([q]), input[i, 6:9]), dim=0))
+        q1 = quaternion.QuaternionTensor(
+            torch.cat((torch.tensor([q]), input[i, 0:3]), dim=0))
+        q2 = quaternion.QuaternionTensor(
+            torch.cat((torch.tensor([q]), input[i, 3:6]), dim=0))
+        q3 = quaternion.QuaternionTensor(
+            torch.cat((torch.tensor([q]), input[i, 6:9]), dim=0))
         input_quaternion.append([q1, q2, q3])
 
     output_quaternion = []
@@ -159,20 +168,23 @@ def loadDataLyapunov(path):
     return torch.utils.data.TensorDataset(
         input_quaternion, output_quaternion)
 
-#Given an array (may not work with tensor or np.array)
-def stateToQuaternion(state):
-    q = torch.tensor([0.5])
-    q1 = torch.cat((q, state[0:3]), dim=0)
-    q2 = torch.cat((q, state[3:6]), dim=0)
-    q3 = torch.cat((q, state[6:9]), dim=0)
-    quaternion = torch.cat((q1, q2, q3), dim=0)
-    return quaternion
+# State is a np.array of 9 elements
 
-# def actionToQuaternion(action):
-#     q = torch.tensor([0.5])
-#     q1 = torch.cat((q, action[0:3]), dim=0)
-#     quaternion = torch.cat((q1, action[3:]), dim=0)
-#     return quaternion
+
+def stateToQuaternion(state):
+    q = np.concatenate((np.array([0.5]), state[0:3], np.array(
+        [0.5]), state[3:6], np.array([0.5]), state[6:9]))
+    return q
+
+# Action is a np.array of 4 elements
+
+
+def actionToQuaternion(action):
+    # q = np.concatenate((np.array([0.5]), action, np.array(
+        # [0]), np.array([0]), np.array([0])))
+    q = action
+    return q
+
 
 if __name__ == "__main__":
     # Import datasets
@@ -184,17 +196,15 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float64
     dt = 0.01
-
-    ########################################
-    #Control Parameters
-    hover_thrust = 0.605
-    rpyu_equilibrium = torch.tensor([0., 0., 1.5708, 0., 0., 0., hover_thrust],
-                                    dtype=dtype)
     V_lambda = 0.5
 
+    ########################################
+    # Control Parameters
+    hover_thrust = 0.605
+
     x_lo = torch.tensor(
-    [-.1, -.1, -1.2, -0.1, -0.1, -2, -0.1, -0.1, -0.1],
-    dtype=dtype) 
+        [-.1, -.1, -1.2, -0.1, -0.1, -2, -0.1, -0.1, -0.1],
+        dtype=dtype)
     x_up = torch.tensor(
         [.1, .1, -0.8, 0.1, 0.1, 2, 0.1, 0.1, 0.1], dtype=dtype)
     u_lo = torch.tensor([-2., -2., -2., 2.], dtype=dtype)
@@ -204,76 +214,89 @@ if __name__ == "__main__":
         [0., 0., -1., 0., 0., 1.5708, 0., 0., 0.],
         dtype=dtype)
     u_eq = torch.tensor([0, 0, 0, hover_thrust], dtype=dtype)
+    rpyu_equilibrium = torch.tensor([x_eq[3], x_eq[4], x_eq[5], u_eq[0], u_eq[1], u_eq[2], u_eq[3]],
+                                    dtype=dtype)
 
-    q2 = torch.cat((q, rpyu_equilibrium[0:3]), dim=0)
-    qa = rpyu_equilibrium[3:]
-    rpyu_equilibrium = torch.cat((q2, qa), dim=0)
+    # q2 = torch.cat((q, rpyu_equilibrium[0:3]), dim=0)
+    # qa = rpyu_equilibrium[3:]
+    # rpyu_equilibrium = torch.cat((q2, qa), dim=0)
 
-    x_lo = stateToQuaternion(x_lo)
-    x_up = stateToQuaternion(x_up)
-    x_eq = stateToQuaternion(x_eq)
+    x_lo = torch.tensor(stateToQuaternion(np.array(x_lo)))
+    x_up = torch.tensor(stateToQuaternion(np.array(x_up)))
+    x_eq = torch.tensor(stateToQuaternion(np.array(x_eq)))
 
+    u_lo = torch.tensor(actionToQuaternion(np.array(u_lo)))
+    u_up = torch.tensor(actionToQuaternion(np.array(u_up)))
+    u_eq = torch.tensor(actionToQuaternion(np.array(u_eq)))
     #######################################
-    
+
     # Define the models
     forward_model = utils.setup_relu_quaternion((2, 4, 4, 2),
-                                     params=None,
-                                     bias=True,
-                                     negative_slope=0.01,
-                                     dtype=dtype)
-    
+                                                params=None,
+                                                bias=True,
+                                                negative_slope=0.01,
+                                                dtype=dtype)
+
     R = torch.cat((.1 * torch.eye(9, dtype=dtype), .123 * torch.ones(
         (6, 9), dtype=dtype)),
         dim=0)
 
     lyapunov_relu = utils.setup_relu_quaternion((3, 3, 2, 1),  # 1 output (cost funct)
-                                     params=None,
-                                     negative_slope=0.1,
-                                     bias=True,
-                                     dtype=dtype)
-    controller_relu = utils.setup_relu_quaternion((3, 2, 1),  # 4 output (thrust)
-                                       params=None,
-                                       negative_slope=0.01,
-                                       bias=True,
-                                       dtype=dtype)
-    
+                                                params=None,
+                                                negative_slope=0.1,
+                                                bias=True,
+                                                dtype=dtype)
+    controller_relu = utils.setup_relu_quaternion((3, 4, 4, 1),  # 4 output (thrust) //(3,2, 1)
+                                                  params=None,
+                                                  negative_slope=0.01,
+                                                  bias=True,
+                                                  dtype=dtype)
+
     # Wandb Initialization
     # wandb.login(key="e3f943e00cb1fa8a14fd0ea76ed9ee6d50f86f5b")
     wandb_dict = {"entity": "emacannizzo",
                   "project": "Quadrotor Test",
                   "run_name": "Training"}
     wandb_dictPre = {"entity": "emacannizzo",
-                  "project": "Quadrotor Test",
-                  "run_name": "Training"}
+                     "project": "Quadrotor Test",
+                     "run_name": "Training"}
 
     load_models = False
     load_pretrained = False
     last_epoch_saved = -1
-    
+
     if load_models and wandb_dict is not None:
         wandb_dictPre["run_name"] = "PreTrainingForward"
         utils.wandbDownload(wandb_dictPre, "model.pt")
-        forward_model = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/model.pt", map_location=device)
+        forward_model = torch.load(utils.wandbGetLocalPath(
+            wandb_dictPre) + "/model.pt", map_location=device)
 
         if not load_pretrained and last_epoch_saved >= 0:
-            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/controller.pt")
-            controller_relu = torch.load(utils.wandbGetLocalPath(wandb_dict) + f"/{last_epoch_saved}/controller.pt", map_location=device)
-            
+            utils.wandbDownload(
+                wandb_dict, f"{last_epoch_saved}/controller.pt")
+            controller_relu = torch.load(utils.wandbGetLocalPath(
+                wandb_dict) + f"/{last_epoch_saved}/controller.pt", map_location=device)
+
             utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/lyapunov.pt")
-            lyapunov_relu = torch.load(utils.wandbGetLocalPath(wandb_dict) + f"/{last_epoch_saved}/lyapunov.pt", map_location=device)
-            
+            lyapunov_relu = torch.load(utils.wandbGetLocalPath(
+                wandb_dict) + f"/{last_epoch_saved}/lyapunov.pt", map_location=device)
+
             utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/R.pt")
-            R = torch.load(utils.wandbGetLocalPath(wandb_dict) + f"/{last_epoch_saved}/R.pt", map_location=device)
+            R = torch.load(utils.wandbGetLocalPath(wandb_dict) +
+                           f"/{last_epoch_saved}/R.pt", map_location=device)
         else:
             wandb_dictPre["run_name"] = "PreTrainingController"
             utils.wandbDownload(wandb_dictPre, "model.pt")
-            controller_relu = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/model.pt", map_location=device)
+            controller_relu = torch.load(utils.wandbGetLocalPath(
+                wandb_dictPre) + "/model.pt", map_location=device)
 
             wandb_dictPre["run_name"] = "PreTrainingLyapunov"
             utils.wandbDownload(wandb_dictPre, "model.pt")
-            lyapunov_relu = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/model.pt", map_location=device)
-            utils.wandbDownload(wandb_dictPre, "R.pt")      
-            R = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/R.pt", map_location=device)  
+            lyapunov_relu = torch.load(utils.wandbGetLocalPath(
+                wandb_dictPre) + "/model.pt", map_location=device)
+            utils.wandbDownload(wandb_dictPre, "R.pt")
+            R = torch.load(utils.wandbGetLocalPath(
+                wandb_dictPre) + "/R.pt", map_location=device)
             R = R[0]
     else:
         # wandb_dictPre["run_name"] = "PreTrainingForward"
@@ -281,15 +304,15 @@ if __name__ == "__main__":
         #                     rpyu_equilibrium,
         #                     model_dataset,
         #                     num_epochs=20, batch_size=200, wandb_dict=None)
-        
+
         # wandb_dictPre["run_name"] = "PreTrainingLyapunov"
         # train_lqr_value_approximator(
         #     cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=20, batch_size=200, wandb_dict=None)
-        
+
         wandb_dictPre["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=200, batch_size=200, wandb_dict=None)
-        
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=150, batch_size=200, wandb_dict=None)
+
     sys.exit()
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(
         dtype, x_lo, x_up, u_lo, u_up, forward_model, hover_thrust, dt)
@@ -332,7 +355,7 @@ if __name__ == "__main__":
     # dut.save_network_path = 'models'
     dut.output_flag = True
 
-    # utils.wandbDownload(wandb_dict, "state_samples_all.csv") 
+    # utils.wandbDownload(wandb_dict, "state_samples_all.csv")
     # state_samples_all = utils.csvToTensor(utils.wandbGetLocalPath(wandb_dict) + "/state_samples_all.csv", dtype=dtype)
     state_samples_all = utils.uniform_sample_in_box(x_lo, x_up, 50)
     dut.train_lyapunov_on_samples(state_samples_all,
