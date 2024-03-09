@@ -98,20 +98,19 @@ def loadDataAsTensors(path, n_in):
     return torch.utils.data.TensorDataset(
         torch.tensor(data_in), torch.tensor(data_out))
 
-quaternion = True
-q = 0.5
+
 
 if __name__ == "__main__":
     # Import datasets
-    model_dataset = loadDataAsTensors('Matlab/forward.csv', 7)
-    controller_dataset = loadDataAsTensors('Matlab/controller_lqr.csv', 9)
-    cost_dataset = loadDataAsTensors('Matlab/lyapunov.csv', 9)
+    # model_dataset = loadDataAsTensors('Matlab/forward.csv', 7)
+    controller_dataset = loadDataAsTensors("Dataset/Data.csv", 9)
+    # cost_dataset = loadDataAsTensors('Matlab/lyapunov.csv', 9)
 
     train_on_samples = True
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float64
     dt = 0.01
-    hover_thrust = -9.81
+    hover_thrust = 0.605
     rpyu_equilibrium = torch.tensor([0., 0., 1.5708, 0., 0., 0., hover_thrust],
                                     dtype=dtype)
     V_lambda = 0.5
@@ -128,35 +127,9 @@ if __name__ == "__main__":
         dtype=dtype)
     u_eq = torch.tensor([0, 0, 0, hover_thrust], dtype=dtype)
 
-    if quaternion:
-        q1 = quaternion.QuaternionTensor(torch.cat((q, x_lo[0:3]), dim=0))
-        q2 = quaternion.QuaternionTensor(torch.cat((q, x_lo[3:6]), dim=0))
-        q3 = quaternion.QuaternionTensor(torch.cat((q, x_lo[6:9]), dim=0))
-        x_lo = [q1, q2, q3]
-
-        q1 = quaternion.QuaternionTensor(torch.cat((q, x_up[0:3]), dim=0))
-        q2 = quaternion.QuaternionTensor(torch.cat((q, x_up[3:6]), dim=0))
-        q3 = quaternion.QuaternionTensor(torch.cat((q, x_up[6:9]), dim=0))
-        x_up = [q1, q2, q3]
-
-        q1 = quaternion.QuaternionTensor(torch.cat((q, x_eq[0:3]), dim=0))
-        q2 = quaternion.QuaternionTensor(torch.cat((q, x_eq[3:6]), dim=0))
-        q3 = quaternion.QuaternionTensor(torch.cat((q, x_eq[6:9]), dim=0))
-        x_eq = [q1, q2, q3]
-
-        u_lo = quaternion.QuaternionTensor(u_lo)
-        u_up = quaternion.QuaternionTensor(u_up)
-        u_eq = quaternion.QuaternionTensor(u_eq)
-
     # Define the models
-    if quaternion:
-        forward_model = utils.setup_relu_quaternion((2, 4, 4, 2),
-                                     params=None,
-                                     bias=True,
-                                     negative_slope=0.01,
-                                     dtype=dtype)
-    else:
-        forward_model = utils.setup_relu((7, 14, 14, 6),
+    
+    forward_model = utils.setup_relu((7, 14, 14, 6),
                                      params=None,
                                      bias=True,
                                      negative_slope=0.01,
@@ -166,26 +139,14 @@ if __name__ == "__main__":
         (6, 9), dtype=dtype)),
         dim=0)
 
-    if quaternion:
-        lyapunov_relu = utils.setup_relu_quaternion((3, 3, 2, 1),  # 1 output (cost funct)
+   
+    lyapunov_relu = utils.setup_relu((9, 12, 6, 1),  # 1 output (cost funct)
                                      params=None,
                                      negative_slope=0.1,
                                      bias=True,
                                      dtype=dtype)
-    else:
-        lyapunov_relu = utils.setup_relu((9, 12, 6, 1),  # 1 output (cost funct)
-                                     params=None,
-                                     negative_slope=0.1,
-                                     bias=True,
-                                     dtype=dtype)
-    if quaternion:
-        controller_relu = utils.setup_relu_quaternion((3, 2, 1),  # 4 output (thrust)
-                                       params=None,
-                                       negative_slope=0.01,
-                                       bias=True,
-                                       dtype=dtype)
-    else:
-        controller_relu = utils.setup_relu((9, 7, 4),  # 4 output (thrust)
+    
+    controller_relu = utils.setup_relu((9, 8, 4),  # 4 output (thrust) (9, 7, 4)
                                        params=None,
                                        negative_slope=0.01,
                                        bias=True,
@@ -200,8 +161,8 @@ if __name__ == "__main__":
                   "project": "Quadrotor Test",
                   "run_name": "Training"}
 
-    load_models = True
-    load_pretrained = True
+    load_models = False
+    load_pretrained = False
     last_epoch_saved = -1
     
     if load_models and wandb_dict is not None:
@@ -230,20 +191,20 @@ if __name__ == "__main__":
             R = torch.load(utils.wandbGetLocalPath(wandb_dictPre) + "/R.pt", map_location=device)  
             R = R[0]
     else:
-        wandb_dictPre["run_name"] = "PreTrainingForward"
-        train_forward_model(forward_model,
-                            rpyu_equilibrium,
-                            model_dataset,
-                            num_epochs=20, batch_size=200, wandb_dict=wandb_dictPre)
+        # wandb_dictPre["run_name"] = "PreTrainingForward"
+        # train_forward_model(forward_model,
+                            # rpyu_equilibrium,
+                            # model_dataset,
+                            # num_epochs=20, batch_size=200, wandb_dict=wandb_dictPre)
         
-        wandb_dictPre["run_name"] = "PreTrainingLyapunov"
-        train_lqr_value_approximator(
-            cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=20, batch_size=200, wandb_dict=wandb_dictPre)
+        # wandb_dictPre["run_name"] = "PreTrainingLyapunov"
+        # train_lqr_value_approximator(
+            # cost_dataset, lyapunov_relu, V_lambda, R, x_eq, num_epochs=20, batch_size=200, wandb_dict=wandb_dictPre)
         
         wandb_dictPre["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=40, batch_size=200, wandb_dict=wandb_dictPre)
-        
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=50, batch_size=200, wandb_dict=None)
+    sys.exit()
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(
         dtype, x_lo, x_up, u_lo, u_up, forward_model, hover_thrust, dt)
     forward_system.x_equilibrium = x_eq

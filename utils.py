@@ -97,18 +97,24 @@ def csvToTensor(file_path, dtype=torch.float64):
     tensor = torch.tensor(df.values, dtype=dtype)
     return tensor
 
-def controllerToCsv(controller, path):
-    model_state_dict = controller.state_dict()
-    names = ["W1", "W2", "B1", "B2"]
+def modelToCsv(model, path):
+    d = model.state_dict()
+    num_layers = int(len(d.keys())/2)
+
+    names = []
+    for i in range(num_layers):
+        names.append("W" +  str(i+1))
+        names.append("B" +  str(i+1))
+
     paths = []
     for name in names:
         paths.append(os.path.join(path, name + ".csv"))
 
-    parameters = [model_state_dict['0.weight'],
-              model_state_dict['2.weight'],
-              model_state_dict['0.bias'],
-              model_state_dict['2.bias']]
-    
+    parameters = []
+    for i in range(num_layers):
+            parameters.append(d[f"{i*2}.weight"])
+            parameters.append(d[f"{i*2}.bias"])
+
     for path, par in zip(paths, parameters):
         tensorToCsv(par, path)
     return paths
@@ -130,47 +136,43 @@ def extractQuaternionWeights(model):
         weigths["j_weight"].append(d[f"{i*2}.j_weight"])
         weigths["k_weight"].append(d[f"{i*2}.k_weight"])
         weigths["bias"].append(d[f"{i*2}.bias"])
-    return weigths
 
-def controllerQuaternionToCsv(controller, path):
-    weigths = extractQuaternionWeights(controller)
+
     w = []
-    for i in range(2):
+    for i in range(num_layers):
         w.append(torch.cat([torch.cat([weigths["r_weight"][i], -weigths["i_weight"][i], -weigths["j_weight"][i],  -weigths["k_weight"][i]], dim=0),
                             torch.cat([weigths["i_weight"][i],  weigths["r_weight"][i], -weigths["k_weight"][i],   weigths["j_weight"][i]], dim=0),
                             torch.cat([weigths["j_weight"][i],  weigths["k_weight"][i],  weigths["r_weight"][i],  -weigths["i_weight"][i]], dim=0),
                             torch.cat([weigths["k_weight"][i], -weigths["j_weight"][i],  weigths["i_weight"][i],   weigths["r_weight"][i]], dim=0)], dim = 1))
+    for i in range(num_layers):
+        w[i] = torch.t(w[i])
+        weigths["bias"][i] = torch.t(weigths["bias"][i])
     
+    return w, weigths["bias"]
 
+def modelQuaternionToCsv(model, path):
+    weigths, biases = extractQuaternionWeights(model)
+    d = model.state_dict()
+    num_layers = int(len(d.keys())/4)
+    
+    names = []
+    for i in range(num_layers):
+        names.append("W" +  str(i+1))
+        names.append("B" +  str(i+1))
 
-    names = ["W1", "W2", "B1", "B2"]
     paths = []
     for name in names:
         paths.append(os.path.join(path, name + ".csv"))
-
-    parameters = [w[0], w[1], weigths["bias"][0], weigths["bias"][1]]
-    for i in range(len(parameters)):
-        parameters[i] = torch.t(parameters[i])
     
+    parameters = []
+    for i in range(num_layers):
+            parameters.append(weigths[i])
+            parameters.append(biases[i])
+
     for path, par in zip(paths, parameters):
         tensorToCsv(par, path)
     return paths
 
-def modelToCsv(model, path):
-    model_state_dict = model.state_dict()
-    names = [f"W{i}" for i in range(len(model_state_dict)//2)] + [f"B{i}" for i in range(len(model_state_dict)//2)]
-    paths = []
-    
-    for name in names:
-        paths.append(os.path.join(path, name + ".csv"))
-
-    parameters = [model_state_dict[f"{i}.weight"] for i in range(0, len(model_state_dict), 2)] + \
-                 [model_state_dict[f"{i}.bias"] for i in range(0, len(model_state_dict), 2)]
-
-    for path, par in zip(paths, parameters):
-        tensorToCsv(par, path)
-    
-    return paths
 
 
 def update_progress(progress):
@@ -1568,14 +1570,15 @@ def train_approximator(dataset,
             })
         # model_params.append(extract_relu_parameters(model))
 
-    controllerQuaternionToCsv(model, "Weights/Quaternion")
+    modelQuaternionToCsv(model, "Weights/Quaternion")
+    # modelToCsv(model, "Weights/Linear")
     if wandb_dict is not None:
         file_path = os.path.join(wandbGetLocalPath(wandb_dict), "model.pt")
         torch.save(model, file_path)
         wandbUpload(file_path, os.path.dirname(file_path))
 
         if save_csv:
-            paths = controllerToCsv(model, wandbGetLocalPath(wandb_dict))
+            paths = modelToCsv(model, wandbGetLocalPath(wandb_dict))
             for path in paths:
                 wandbUpload(path, os.path.dirname(path))
                 

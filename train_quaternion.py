@@ -159,6 +159,21 @@ def loadDataLyapunov(path):
     return torch.utils.data.TensorDataset(
         input_quaternion, output_quaternion)
 
+#Given an array (may not work with tensor or np.array)
+def stateToQuaternion(state):
+    q = torch.tensor([0.5])
+    q1 = torch.cat((q, state[0:3]), dim=0)
+    q2 = torch.cat((q, state[3:6]), dim=0)
+    q3 = torch.cat((q, state[6:9]), dim=0)
+    quaternion = torch.cat((q1, q2, q3), dim=0)
+    return quaternion
+
+# def actionToQuaternion(action):
+#     q = torch.tensor([0.5])
+#     q1 = torch.cat((q, action[0:3]), dim=0)
+#     quaternion = torch.cat((q1, action[3:]), dim=0)
+#     return quaternion
+
 if __name__ == "__main__":
     # Import datasets
     # model_dataset = loadDataForward("Dataset/Data.csv")
@@ -194,20 +209,10 @@ if __name__ == "__main__":
     qa = rpyu_equilibrium[3:]
     rpyu_equilibrium = torch.cat((q2, qa), dim=0)
 
-    q1 = torch.cat((q, x_lo[0:3]), dim=0)
-    q2 = torch.cat((q, x_lo[3:6]), dim=0)
-    q3 = torch.cat((q, x_lo[6:9]), dim=0)
-    x_lo = torch.cat((q1, q2, q3), dim=0)
+    x_lo = stateToQuaternion(x_lo)
+    x_up = stateToQuaternion(x_up)
+    x_eq = stateToQuaternion(x_eq)
 
-    q1 = torch.cat((q, x_up[0:3]), dim=0)
-    q2 = torch.cat((q, x_up[3:6]), dim=0)
-    q3 = torch.cat((q, x_up[6:9]), dim=0)
-    x_up = torch.cat((q1, q2, q3), dim=0)
-    
-    q1 = torch.cat((q, x_eq[0:3]), dim=0)
-    q2 = torch.cat((q, x_eq[3:6]), dim=0)
-    q3 = torch.cat((q, x_eq[6:9]), dim=0)
-    x_eq = torch.cat((q1, q2, q3), dim=0)   
     #######################################
     
     # Define the models
@@ -283,7 +288,7 @@ if __name__ == "__main__":
         
         wandb_dictPre["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=50, batch_size=200, wandb_dict=None)
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=200, batch_size=200, wandb_dict=None)
         
     sys.exit()
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(
