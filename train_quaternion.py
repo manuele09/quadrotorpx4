@@ -15,6 +15,7 @@ import sys
 import csv
 import hTorch.htorch.quaternion as quaternion
 
+numQOut = 1
 # roll pitch yaw u of equilibrium
 
 
@@ -176,13 +177,14 @@ def stateToQuaternion(state):
         [0.5]), state[3:6], np.array([0.5]), state[6:9]))
     return q
 
+
 # Action is a np.array of 4 elements
-
-
 def actionToQuaternion(action):
-    # q = np.concatenate((np.array([0.5]), action, np.array(
-        # [0]), np.array([0]), np.array([0])))
-    q = action
+    if numQOut == 2:
+        q = np.concatenate((np.array([0.5]), action, np.array(
+            [0]), np.array([0]), np.array([0])))
+    else:
+        q = action
     return q
 
 
@@ -241,12 +243,12 @@ if __name__ == "__main__":
         (6, 9), dtype=dtype)),
         dim=0)
 
-    lyapunov_relu = utils.setup_relu_quaternion((3, 3, 2, 1),  # 1 output (cost funct)
+    lyapunov_relu = utils.setup_relu_quaternion((3, 3, 2, 1),  
                                                 params=None,
                                                 negative_slope=0.1,
                                                 bias=True,
                                                 dtype=dtype)
-    controller_relu = utils.setup_relu_quaternion((3, 4, 4, 1),  # 4 output (thrust) //(3,2, 1)
+    controller_relu = utils.setup_relu_quaternion((3, 2, 2, numQOut),  
                                                   params=None,
                                                   negative_slope=0.01,
                                                   bias=True,
@@ -311,7 +313,7 @@ if __name__ == "__main__":
 
         wandb_dictPre["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=150, batch_size=200, wandb_dict=None)
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=10, batch_size=200, wandb_dict=None)
 
     sys.exit()
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(
