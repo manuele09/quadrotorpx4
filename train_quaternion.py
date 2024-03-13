@@ -14,9 +14,28 @@ import wandb
 import sys
 import csv
 import hTorch.htorch.quaternion as quaternion
+import hTorch.htorch.layers as layers
 
 numQOut = 1
-# roll pitch yaw u of equilibrium
+gain = 1
+qReal = 0.05*gain
+controllerLayers = (3, 2, numQOut)
+name = f"Weights/Quaternion/Out{numQOut}/"
+for i in controllerLayers:
+    name = f"{name}{i}"
+name = f"{name}/Gain{gain}/QReal{qReal}"
+print(name)
+
+
+dataN = {
+    "weights_paths": f"{name}",
+    "num_layers": len(controllerLayers) - 1,
+    "slope": 0.01,
+    "isQuaternion": True,
+    "realPart": qReal,
+    "num_output_neurons": controllerLayers[-1],
+    "gain": gain
+}
 
 
 def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
@@ -34,8 +53,7 @@ def train_forward_model(forward_model, rpyu_equilibrium, model_dataset,
 
     def compute_next_v(model, rpyu):
         # Questa funzione calcola la differenza tra l'output del modello quando si passa rpyu e l'output del modello quando si passa rpyu_equilibrium. In sostanza, sta calcolando la differenza tra l'uscita del modello in due stati diversi.
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return model(rpyu) - model(rpyu_equilibrium.clone().to(device))
+        return model(rpyu) - model(rpyu_equilibrium.clone())
 
     utils.train_approximator(v_dataset,
                              forward_model,
@@ -56,9 +74,8 @@ def train_lqr_value_approximator(state_value_dataset, lyapunov_relu, V_lambda, R
     R = R.detach()
 
     def compute_v(model, x):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return model(x) - model(x_equilibrium.to(device)) + (V_lambda * torch.norm(
-            R.to(device) @ (x - x_equilibrium.to(device)).T, p=1, dim=0).reshape((-1, 1)))
+        return model(x) - model(x_equilibrium) + (V_lambda * torch.norm(
+            R @ (x - x_equilibrium).T, p=1, dim=0).reshape((-1, 1)))
 
     utils.train_approximator(state_value_dataset,
                              lyapunov_relu,
@@ -71,26 +88,25 @@ def train_lqr_value_approximator(state_value_dataset, lyapunov_relu, V_lambda, R
     R.requires_grad_(False)
 
 
-def train_controller_approximator(control_dataset, controller_relu, state_eq, control_equilibrium, lr, num_epochs=100, batch_size=20, wandb_dict=None):
+def train_controller_approximator(control_dataset, controller_relu, state_eq, control_equilibrium, lr, num_epochs=100, batch_size=20, wandb_dict=None, modelSave=None):
 
     def compute_control(model, dataset):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return model(dataset).torch() - model(state_eq.clone().to(device)).torch() + control_equilibrium.clone().to(device)
-
+        return model(dataset) - model(state_eq) + control_equilibrium
+    
     utils.train_approximator(control_dataset,
                              controller_relu,
                              compute_control,
                              batch_size=batch_size,
                              num_epochs=num_epochs,
                              lr=lr,
-                             wandb_dict=wandb_dict, save_csv=True)
+                             wandb_dict=wandb_dict, save_csv=True, modelSave=modelSave)
 
 
 def load_data(path, n_in):
     Dati = pd.read_csv(path, sep=',', header=None)
     Dati_val = np.array(Dati.values)
-    dati_input = Dati_val[:, :n_in]
-    dati_output = Dati_val[:, n_in:]
+    dati_input = gain * Dati_val[:, :n_in]
+    dati_output = gain * Dati_val[:, n_in:]
 
     return dati_input, dati_output
 
@@ -173,15 +189,15 @@ def loadDataLyapunov(path):
 
 
 def stateToQuaternion(state):
-    q = np.concatenate((np.array([0.5]), state[0:3], np.array(
-        [0.5]), state[3:6], np.array([0.5]), state[6:9]))
+    q = np.concatenate((np.array([qReal]), state[0:3], np.array(
+        [qReal]), state[3:6], np.array([qReal]), state[6:9]))
     return q
 
 
 # Action is a np.array of 4 elements
 def actionToQuaternion(action):
     if numQOut == 2:
-        q = np.concatenate((np.array([0.5]), action, np.array(
+        q = np.concatenate((np.array([qReal]), action, np.array(
             [0]), np.array([0]), np.array([0])))
     else:
         q = action
@@ -195,7 +211,6 @@ if __name__ == "__main__":
     controller_dataset = loadDatacontroller("Dataset/Data.csv")
 
     train_on_samples = True
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float64
     dt = 0.01
     V_lambda = 0.5
@@ -233,6 +248,17 @@ if __name__ == "__main__":
     #######################################
 
     # Define the models
+    controller_relu = torch.nn.Sequential(
+        layers.QLinear(3, 2, bias=True).type(torch.float64),
+        torch.nn.LeakyReLU(0.01),
+        layers.QLinear(2, 1, bias=True).type(torch.float64)
+    )
+    # controller_relu = utils.setup_relu_quaternion(controllerLayers,
+    #                                               params=None,
+    #                                               negative_slope=0.01,
+    #                                               bias=True,
+    #                                               dtype=dtype)
+
     forward_model = utils.setup_relu_quaternion((2, 4, 4, 2),
                                                 params=None,
                                                 bias=True,
@@ -243,16 +269,11 @@ if __name__ == "__main__":
         (6, 9), dtype=dtype)),
         dim=0)
 
-    lyapunov_relu = utils.setup_relu_quaternion((3, 3, 2, 1),  
+    lyapunov_relu = utils.setup_relu_quaternion((3, 3, 2, 1),
                                                 params=None,
                                                 negative_slope=0.1,
                                                 bias=True,
                                                 dtype=dtype)
-    controller_relu = utils.setup_relu_quaternion((3, 2, 2, numQOut),  
-                                                  params=None,
-                                                  negative_slope=0.01,
-                                                  bias=True,
-                                                  dtype=dtype)
 
     # Wandb Initialization
     # wandb.login(key="e3f943e00cb1fa8a14fd0ea76ed9ee6d50f86f5b")
@@ -271,35 +292,36 @@ if __name__ == "__main__":
         wandb_dictPre["run_name"] = "PreTrainingForward"
         utils.wandbDownload(wandb_dictPre, "model.pt")
         forward_model = torch.load(utils.wandbGetLocalPath(
-            wandb_dictPre) + "/model.pt", map_location=device)
+            wandb_dictPre) + "/model.pt")
 
-        if not load_pretrained and last_epoch_saved >= 0:
-            utils.wandbDownload(
-                wandb_dict, f"{last_epoch_saved}/controller.pt")
-            controller_relu = torch.load(utils.wandbGetLocalPath(
-                wandb_dict) + f"/{last_epoch_saved}/controller.pt", map_location=device)
-
-            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/lyapunov.pt")
-            lyapunov_relu = torch.load(utils.wandbGetLocalPath(
-                wandb_dict) + f"/{last_epoch_saved}/lyapunov.pt", map_location=device)
-
-            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/R.pt")
-            R = torch.load(utils.wandbGetLocalPath(wandb_dict) +
-                           f"/{last_epoch_saved}/R.pt", map_location=device)
-        else:
+        if load_pretrained:
             wandb_dictPre["run_name"] = "PreTrainingController"
             utils.wandbDownload(wandb_dictPre, "model.pt")
             controller_relu = torch.load(utils.wandbGetLocalPath(
-                wandb_dictPre) + "/model.pt", map_location=device)
+                wandb_dictPre) + "/model.pt")
 
             wandb_dictPre["run_name"] = "PreTrainingLyapunov"
             utils.wandbDownload(wandb_dictPre, "model.pt")
             lyapunov_relu = torch.load(utils.wandbGetLocalPath(
-                wandb_dictPre) + "/model.pt", map_location=device)
+                wandb_dictPre) + "/model.pt")
             utils.wandbDownload(wandb_dictPre, "R.pt")
             R = torch.load(utils.wandbGetLocalPath(
-                wandb_dictPre) + "/R.pt", map_location=device)
+                wandb_dictPre) + "/R.pt")
             R = R[0]
+        else:
+            utils.wandbDownload(
+                wandb_dict, f"{last_epoch_saved}/controller.pt")
+            controller_relu = torch.load(utils.wandbGetLocalPath(
+                wandb_dict) + f"/{last_epoch_saved}/controller.pt")
+
+            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/lyapunov.pt")
+            lyapunov_relu = torch.load(utils.wandbGetLocalPath(
+                wandb_dict) + f"/{last_epoch_saved}/lyapunov.pt")
+
+            utils.wandbDownload(wandb_dict, f"{last_epoch_saved}/R.pt")
+            R = torch.load(utils.wandbGetLocalPath(wandb_dict) +
+                           f"/{last_epoch_saved}/R.pt")
+
     else:
         # wandb_dictPre["run_name"] = "PreTrainingForward"
         # train_forward_model(forward_model,
@@ -313,7 +335,7 @@ if __name__ == "__main__":
 
         wandb_dictPre["run_name"] = "PreTrainingController"
         train_controller_approximator(
-            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=10, batch_size=200, wandb_dict=None)
+            controller_dataset, controller_relu, x_eq, u_eq, lr=0.001, num_epochs=1200, batch_size=500, wandb_dict=None, modelSave=dataN)
 
     sys.exit()
     forward_system = quadrotor.QuadrotorWithPixhawkReLUSystem(

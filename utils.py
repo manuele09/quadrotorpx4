@@ -8,34 +8,44 @@ import wandb
 import os
 import pandas as pd
 import hTorch.htorch.layers as qlayers
+import json
 
 # Init wandb. If needed, the project or the run will be created.
 # If resume is True, the run will be resumed if it exists, otherwise (False) it will be overwritten.
 # Important: call finish() before creating or resuming a new run.
+
+
 def wandbInit(wandb_dict, resume=True):
     wandb_api = wandb.Api()
     projects = wandb_api.projects(wandb_dict['entity'])
     project_exists = any(p.name == wandb_dict['project'] for p in projects)
 
     if resume:
-        resume_str = "allow" # Resume the run if it exists, otherwise create a new one
+        resume_str = "allow"  # Resume the run if it exists, otherwise create a new one
     else:
-        resume_str = None # Overwrite the run if it exists
+        resume_str = None  # Overwrite the run if it exists
 
     if project_exists:
         # Search for the run in the project
-        runs = wandb_api.runs(wandb_dict['entity'] + "/" + wandb_dict['project'])
-        run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
-        if (run_id is None): # If the run doesn't exist, create it
+        runs = wandb_api.runs(
+            wandb_dict['entity'] + "/" + wandb_dict['project'])
+        run_id = next((run.id for run in runs if run.name ==
+                      wandb_dict["run_name"]), None)
+        if (run_id is None):  # If the run doesn't exist, create it
             print(f"Wandb: creating new run: {wandb_dict['run_name']}")
-            wandb.init(project=wandb_dict['project'], name=wandb_dict["run_name"], sync_tensorboard=True)
-        else: # If the run exists, resume or create it
+            wandb.init(
+                project=wandb_dict['project'], name=wandb_dict["run_name"], sync_tensorboard=True)
+        else:  # If the run exists, resume or create it
             print(f"Wandb: resuming run: {wandb_dict['run_name']}")
-            wandb.init(project=wandb_dict['project'], id=run_id, resume=resume_str, sync_tensorboard=True)
+            wandb.init(project=wandb_dict['project'], id=run_id,
+                       resume=resume_str, sync_tensorboard=True)
     else:
-        print(f"Wandb: creating new project and run: {wandb_dict['project']}/{wandb_dict['run_name']}")
-        wandb.init(project=wandb_dict['project'], name=f"{wandb_dict['run_name']}", sync_tensorboard=True)
-    subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
+        print(
+            f"Wandb: creating new project and run: {wandb_dict['project']}/{wandb_dict['run_name']}")
+        wandb.init(project=wandb_dict['project'],
+                   name=f"{wandb_dict['run_name']}", sync_tensorboard=True)
+    subdirectories = ["WandbLogs",
+                      wandb_dict["project"], wandb_dict["run_name"]]
     create_subdirectories(".", subdirectories)
 
 # Upload a file to wandb
@@ -43,13 +53,16 @@ def wandbInit(wandb_dict, resume=True):
 # global_path: /path/to/file.pt
 # base_path: /path
 # The file will be uploaded to wandb in the directory /to/file.pt
+
+
 def wandbUpload(global_path, base_path):
     wandb.save(global_path, base_path=base_path, policy="now")
+
 
 def create_subdirectories(base_path, subdirectories):
     for subdirectory in subdirectories:
         base_path = os.path.join(base_path, subdirectory)
-        
+
         # Check if the directory already exists
         if not os.path.exists(base_path):
             # Create the directory and its parents if they don't exist
@@ -57,24 +70,31 @@ def create_subdirectories(base_path, subdirectories):
             print(f"Directory created: {base_path}")
 
 # Download a file from wandb given the project, the run and the path of the file.
+
+
 def wandbDownload(wandb_dict, wandb_path):
-    subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
+    subdirectories = ["WandbLogs",
+                      wandb_dict["project"], wandb_dict["run_name"]]
     create_subdirectories(".", subdirectories)
     file_path = wandbGetLocalPath(wandb_dict)
 
     wandb_api = wandb.Api()
     projects = wandb_api.projects(wandb_dict["entity"])
     project_exists = any(p.name == wandb_dict["project"] for p in projects)
-    if project_exists: 
-        runs = wandb_api.runs(wandb_dict["entity"] + "/" + wandb_dict["project"])
-        run_id = next((run.id for run in runs if run.name == wandb_dict["run_name"]), None)
+    if project_exists:
+        runs = wandb_api.runs(
+            wandb_dict["entity"] + "/" + wandb_dict["project"])
+        run_id = next((run.id for run in runs if run.name ==
+                      wandb_dict["run_name"]), None)
         if run_id is not None:
-            run = wandb_api.run(wandb_dict["entity"] + "/" + wandb_dict["project"] +"/" + run_id)
+            run = wandb_api.run(
+                wandb_dict["entity"] + "/" + wandb_dict["project"] + "/" + run_id)
             file = run.file(wandb_path)
             if file.size != 0:
                 file.download(file_path, replace=True)
             else:
-                print(f"Wandb: {wandb_path} does not exists on {wandb_dict['project']}/{wandb_dict['run_name']}")
+                print(
+                    f"Wandb: {wandb_path} does not exists on {wandb_dict['project']}/{wandb_dict['run_name']}")
                 return
         else:
             print(f"Wandb: Run {wandb_dict['run_name']} does not exists")
@@ -84,18 +104,23 @@ def wandbDownload(wandb_dict, wandb_path):
         return
     return
 
+
 def wandbGetLocalPath(wandb_dict):
-    subdirectories = ["WandbLogs", wandb_dict["project"], wandb_dict["run_name"]]
+    subdirectories = ["WandbLogs",
+                      wandb_dict["project"], wandb_dict["run_name"]]
     return os.path.join(*subdirectories)
+
 
 def tensorToCsv(tensor, path):
     df = pd.DataFrame(tensor.numpy())
     df.to_csv(path, index=False, header=False)
 
+
 def csvToTensor(file_path, dtype=torch.float64):
     df = pd.read_csv(file_path, header=None)
     tensor = torch.tensor(df.values, dtype=dtype)
     return tensor
+
 
 def modelToCsv(model, path):
     d = model.state_dict()
@@ -103,8 +128,8 @@ def modelToCsv(model, path):
 
     names = []
     for i in range(num_layers):
-        names.append("W" +  str(i+1))
-        names.append("B" +  str(i+1))
+        names.append("W" + str(i+1))
+        names.append("B" + str(i+1))
 
     paths = []
     for name in names:
@@ -112,12 +137,13 @@ def modelToCsv(model, path):
 
     parameters = []
     for i in range(num_layers):
-            parameters.append(d[f"{i*2}.weight"])
-            parameters.append(d[f"{i*2}.bias"])
+        parameters.append(d[f"{i*2}.weight"])
+        parameters.append(d[f"{i*2}.bias"])
 
     for path, par in zip(paths, parameters):
         tensorToCsv(par, path)
     return paths
+
 
 def extractQuaternionWeights(model):
     d = model.state_dict()
@@ -137,42 +163,43 @@ def extractQuaternionWeights(model):
         weigths["k_weight"].append(d[f"{i*2}.k_weight"])
         weigths["bias"].append(d[f"{i*2}.bias"])
 
-
     w = []
     for i in range(num_layers):
         w.append(torch.cat([torch.cat([weigths["r_weight"][i], -weigths["i_weight"][i], -weigths["j_weight"][i],  -weigths["k_weight"][i]], dim=0),
-                            torch.cat([weigths["i_weight"][i],  weigths["r_weight"][i], -weigths["k_weight"][i],   weigths["j_weight"][i]], dim=0),
-                            torch.cat([weigths["j_weight"][i],  weigths["k_weight"][i],  weigths["r_weight"][i],  -weigths["i_weight"][i]], dim=0),
-                            torch.cat([weigths["k_weight"][i], -weigths["j_weight"][i],  weigths["i_weight"][i],   weigths["r_weight"][i]], dim=0)], dim = 1))
+                            torch.cat([weigths["i_weight"][i],  weigths["r_weight"][i], -
+                                      weigths["k_weight"][i],   weigths["j_weight"][i]], dim=0),
+                            torch.cat([weigths["j_weight"][i],  weigths["k_weight"][i],
+                                      weigths["r_weight"][i],  -weigths["i_weight"][i]], dim=0),
+                            torch.cat([weigths["k_weight"][i], -weigths["j_weight"][i],  weigths["i_weight"][i],   weigths["r_weight"][i]], dim=0)], dim=1))
     for i in range(num_layers):
         w[i] = torch.t(w[i])
         weigths["bias"][i] = torch.t(weigths["bias"][i])
-    
+
     return w, weigths["bias"]
+
 
 def modelQuaternionToCsv(model, path):
     weigths, biases = extractQuaternionWeights(model)
     d = model.state_dict()
     num_layers = int(len(d.keys())/4)
-    
+
     names = []
     for i in range(num_layers):
-        names.append("W" +  str(i+1))
-        names.append("B" +  str(i+1))
+        names.append("W" + str(i+1))
+        names.append("B" + str(i+1))
 
     paths = []
     for name in names:
         paths.append(os.path.join(path, name + ".csv"))
-    
+
     parameters = []
     for i in range(num_layers):
-            parameters.append(weigths[i])
-            parameters.append(biases[i])
+        parameters.append(weigths[i])
+        parameters.append(biases[i])
 
     for path, par in zip(paths, parameters):
         tensorToCsv(par, path)
     return paths
-
 
 
 def update_progress(progress):
@@ -860,7 +887,6 @@ def train_model(model,
     """
     loss_fn = torch.nn.MSELoss(reduction="sum")
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    device = next(model.parameters()).device
 
     data_set = torch.utils.data.TensorDataset(inputs, labels)
     data_loader = torch.utils.data.DataLoader(data_set,
@@ -869,8 +895,7 @@ def train_model(model,
 
     for epoch in range(num_epoch):
         for batch_data, batch_label in data_loader:
-            batch_data, batch_label = batch_data.to(device), batch_label.to(
-                device)
+            batch_data, batch_label = batch_data, batch_label
             y_pred = model(batch_data)
             loss = loss_fn(y_pred, batch_label) / batch_size
             optimizer.zero_grad()
@@ -1164,11 +1189,12 @@ def setup_relu(relu_layer_width: tuple,
     relu = torch.nn.Sequential(*layers)
     return relu
 
+
 def setup_relu_quaternion(relu_layer_width: tuple,
-               params=None,
-               negative_slope: float = 0.01,
-               bias: bool = True,
-               dtype=torch.float64):
+                          params=None,
+                          negative_slope: float = 0.01,
+                          bias: bool = True,
+                          dtype=torch.float64):
     """
     Setup a relu network.
     @param negative_slope The negative slope of the leaky relu units.
@@ -1178,7 +1204,8 @@ def setup_relu_quaternion(relu_layer_width: tuple,
     if params is not None:
         assert (isinstance(params, torch.Tensor))
 
-    def set_param(linear, param_count): #Non verificata correttezza con quaternioni perchè non usata
+    # Non verificata correttezza con quaternioni perchè non usata
+    def set_param(linear, param_count):
         linear.weight.data = params[param_count:param_count +
                                     linear.in_features *
                                     linear.out_features].clone().reshape(
@@ -1190,6 +1217,17 @@ def setup_relu_quaternion(relu_layer_width: tuple,
                                       linear.out_features].clone()
             param_count += linear.out_features
         return param_count
+    #relu_layer_width = (3, 2, 1)
+    #linear_layers = [None, None]
+    #   next_layer_width = 2
+    #   linear_layers[0] = torch.nn.Linear(3, 2, bias=True).type(torch.float64)
+    #   next_layer_width = 1
+    #   linear_layers[1] = torch.nn.Linear(2, 1, bias=True).type(torch.float64)
+    #layers = [None, None, None]
+    #   layers[0] = linear_layers[0] = torch.nn.Linear(3, 2, bias=True).type(torch.float64)
+    #   layers[1] = torch.nn.LeakyReLU(0.01)
+    #   layers[2] = linear_layers[1]
+
 
     linear_layers = [None] * (len(relu_layer_width) - 1)
     param_count = 0
@@ -1242,6 +1280,7 @@ def extract_relu_parameters(relu):
             if layer.bias is not None:
                 weights_biases.append(layer.bias.data.reshape((-1)))
     return torch.cat(weights_biases)
+
 
 def extract_relu_quaternion_parameters(relu):
     """
@@ -1505,7 +1544,8 @@ def train_approximator(dataset,
                        output_fun_args=dict(),
                        verbose=True,
                        wandb_dict=None,
-                       save_csv=False):
+                       save_csv=False,
+                       modelSave=None):
     """
     @param additional_variable A list of torch tensors (with
     requires_grad=True), such that we will optimize the model together with
@@ -1515,11 +1555,8 @@ def train_approximator(dataset,
     """
     if wandb_dict is not None:
         wandbInit(wandb_dict, resume=False)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
     if additional_variable:
-        additional_variable = [var.to(device) for var in additional_variable]
-
+        additional_variable = [var for var in additional_variable]
 
     train_set_size = int(len(dataset) * 0.8)
     test_set_size = len(dataset) - train_set_size
@@ -1533,18 +1570,21 @@ def train_approximator(dataset,
         list(model.parameters()) + additional_variable
     optimizer = torch.optim.Adam(variables, lr=lr)
     loss = torch.nn.MSELoss()
-
     # model_params = []
     for epoch in range(num_epochs):
         running_loss = 0.
         for i, data in enumerate(train_loader, 0):
             input_samples, target = data
-            input_samples, target = input_samples.to(device), target.to(device)
+            input_samples, target = input_samples, target
             optimizer.zero_grad()
-            
-            
+
             output_samples = output_fun(model, input_samples,
                                         **output_fun_args)
+            if i == 0:
+                print(f"Bias: {model.state_dict()['2.bias']}\n")
+                # print(f"out samp: {output_samples[i]}")
+                # print(f"Not scaled: {model(input_samples[i])}\n\n")
+            # output_samples = model(input_samples)
             batch_loss = loss(output_samples, target)
             batch_loss.backward()
             optimizer.step()
@@ -1552,8 +1592,7 @@ def train_approximator(dataset,
             running_loss += batch_loss.item()
 
         test_input_samples, test_target = test_set[:]
-        test_input_samples, test_target = test_input_samples.to(
-            device), test_target.to(device)
+        test_input_samples, test_target = test_input_samples, test_target
 
         test_output_samples = output_fun(
             model, test_input_samples, **output_fun_args)
@@ -1569,8 +1608,31 @@ def train_approximator(dataset,
                 "test_loss": test_loss
             })
         # model_params.append(extract_relu_parameters(model))
+        if epoch == 1:
+            print("dddd")
+        if epoch % 30 == 0 and modelSave is not None:
+            data = modelSave.copy()
+            data['weights_paths'] = os.path.join(modelSave['weights_paths'], str(epoch))
+            data['train_loss'] = running_loss / len(train_loader)
+            data['test_loss'] = test_loss.item()
+            os.makedirs(data['weights_paths'], exist_ok=True)
+            modelQuaternionToCsv(model, data['weights_paths'])
+            print(f"Written to {data['weights_paths']}\n")
 
-    modelQuaternionToCsv(model, "Weights/Quaternion")
+            with open(os.path.join(data['weights_paths'], "NeuralNet.json"), 'w') as json_file:
+                json.dump(data, json_file, indent=4)
+
+
+    data = modelSave.copy()
+    data['weights_paths'] = os.path.join(modelSave['weights_paths'], str(epoch))
+    data['train_loss'] = running_loss / len(train_loader)
+    data['test_loss'] = test_loss.item()
+    os.makedirs(data['weights_paths'], exist_ok=True)
+    modelQuaternionToCsv(model, data['weights_paths'])
+    print(f"Written to {data['weights_paths']}\n")
+
+    with open(os.path.join(data['weights_paths'], "NeuralNet.json"), 'w') as json_file:
+        json.dump(data, json_file, indent=4)
     # modelToCsv(model, "Weights/Linear")
     if wandb_dict is not None:
         file_path = os.path.join(wandbGetLocalPath(wandb_dict), "model.pt")
@@ -1581,16 +1643,13 @@ def train_approximator(dataset,
             paths = modelToCsv(model, wandbGetLocalPath(wandb_dict))
             for path in paths:
                 wandbUpload(path, os.path.dirname(path))
-                
+
         if additional_variable is not None:
             file_path = os.path.join(wandbGetLocalPath(wandb_dict), "R.pt")
             torch.save(additional_variable, file_path)
             wandbUpload(file_path, os.path.dirname(file_path))
 
-        
         wandb.finish()
-
-    
 
 
 def uniform_sample_in_box(lo: torch.Tensor, hi: torch.Tensor,

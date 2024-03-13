@@ -1,0 +1,11 @@
+{
+    "weights_paths": "Weights/Quaternion/Out1/3221/Gain10/QReal0.1/300",
+    "num_layers": 4,
+    "slope": 0.01,
+    "isQuaternion": true,
+    "realPart": 0.1,
+    "num_output_neurons": 1,
+    "gain": 10,
+    "train_loss": 0.00048277581566249285,
+    "test_loss": 0.00039920403535506676
+}
